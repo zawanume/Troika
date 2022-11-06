@@ -133,8 +133,8 @@ export class MusicBot extends MusicBotBase {
     // Set activity
     if(!this.maintenance){
       client.editStatus({
-        type: discord.Constants.ActivityTypes.LISTENING,
-        name: "音楽"
+        type: discord.Constants.ActivityTypes.GAME, // オリジナルではLISTENING
+        name: "音量注意"
       });
 
       // Set main tick
@@ -438,9 +438,9 @@ export class MusicBot extends MusicBotBase {
       if(server.queue instanceof QueueManagerWithBgm && server.queue.isBGM){
         server.player.disconnect();
       }else if(server.player.isPlaying){
-        // 誰も聞いてる人がいない場合一時停止
-        server.player.pause();
-        await this._client.createMessage(server.boundTextChannel, ":pause_button:ボイスチャンネルから誰もいなくなったため一時停止しました").catch(e => this.Log(e));
+        // 誰も聞いてる人がいない場合切断 オリジナルでは一時停止
+        server.player.disconnect();
+        await this._client.createMessage(server.boundTextChannel, ":wave:ボイスチャンネルから誰もいなくなったため切断します").catch(e => this.Log(e));
       }
     }
   }

@@ -37,7 +37,7 @@ export class PlayManager extends ServerManagerBase {
   protected readonly retryLimit = 3;
   protected _seek = 0;
   protected _errorReportChannel = null as TextChannel;
-  protected _volume = 100;
+  protected _volume = 35; // オリジナルでは100
   protected _errorCount = 0;
   protected _errorUrl = "";
   protected _preparing = false;
@@ -190,12 +190,12 @@ export class PlayManager extends ServerManagerBase {
         u.end();
       }
       this.Log("Play started successfully");
-      if(mes){
-        // 再生開始メッセージ
+      /*if(mes){
+        // 再生開始メッセージを表示しない
         const _t = Number(this.currentAudioInfo.LengthSeconds);
         const [min, sec] = Util.time.CalcMinSec(_t);
         const [qhour, qmin, qsec] = Util.time.CalcHourMinSec(this.server.queue.lengthSeconds - this.currentAudioInfo.LengthSeconds);
-        /* eslint-disable @typescript-eslint/indent */
+        // eslint-disable @typescript-eslint/indent
         const embed = new Helper.MessageEmbedBuilder()
           .setTitle(":cd:現在再生中:musical_note:")
           .setDescription(
@@ -218,12 +218,12 @@ export class PlayManager extends ServerManagerBase {
           .addField("再生待ちの曲", this.server.queue.loopEnabled ? "ループします" : (this.server.queue.length - 1) + "曲(" + (qhour === "0" ? "" : qhour + ":") + qmin + ":" + qsec + ")", true)
           .setThumbnail(this.currentAudioInfo.Thumnail)
         ;
-        /* eslint-enable @typescript-eslint/indent */
+        // eslint-enable @typescript-eslint/indent
         if(this.currentAudioInfo.ServiceIdentifer === "youtube" && (this.currentAudioInfo as YouTube).IsFallbacked){
           embed.addField(":warning:注意", FallBackNotice);
         }
         mes.edit({content: "", embeds: [embed.toEris()]}).catch(e => Util.logger.log(e, "error"));
-      }
+      }*/
     }
     catch(e){
       Util.logger.log(e, "error");
@@ -375,15 +375,15 @@ export class PlayManager extends ServerManagerBase {
       // キュー整理
       await this.server.queue.next();
     }
-    // キューがなくなったら接続終了
+    // キューがなくなったら待機 オリジナルでは切断
     if(this.server.queue.isEmpty){
       this.Log("Queue empty");
       if(this.server.boundTextChannel){
         const ch = this.server.bot.client.getChannel(this.server.boundTextChannel) as TextChannel;
         if(!ch) return;
-        await ch.createMessage(":wave:キューが空になったため終了します").catch(e => Util.logger.log(e, "error"));
+        await ch.createMessage(":raised_hand:キューが空になりました").catch(e => Util.logger.log(e, "error"));
       }
-      this.disconnect();
+      this.stop();
     // なくなってないなら再生開始！
     }else{
       this.play();
