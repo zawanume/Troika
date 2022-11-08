@@ -437,8 +437,9 @@ export class MusicBot extends MusicBotBase {
     }else if(oldChannel.voiceMembers.has(this._client.user.id) && oldChannel.voiceMembers.size === 1){
       if(server.queue instanceof QueueManagerWithBgm && server.queue.isBGM){
         server.player.disconnect();
-      }else if(server.player.isPlaying){
-        // 誰も聞いてる人がいない場合切断 オリジナルでは一時停止
+      }else{
+        // 誰も聞いてる人がいない場合、キューを空にして切断 オリジナルでは一時停止
+        server.queue.removeAll();
         server.player.disconnect();
         await this._client.createMessage(server.boundTextChannel, ":wave:ボイスチャンネルから誰もいなくなったため切断します").catch(e => this.Log(e));
       }
