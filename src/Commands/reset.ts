@@ -35,6 +35,9 @@ export default class Reset extends BaseCommand {
   }
 
   async run(message:CommandMessage, options:CommandArgs){
+    if(message.member.id == Util.config.adminId){
+      Util.logger.log("[reset] Command \"reset\" is used by adminId");
+    }
     // config.jsonのadminIdに登録されたユーザにも許可
     if(!(message.member.permissions.has("manageGuild") ||  message.member.id==Util.config.adminId)){
       message.reply("この操作を実行する権限がありません").catch(e => Util.logger.log(e, "error"));
