@@ -21,12 +21,12 @@ import type { CommandMessage } from "../Component/CommandMessage";
 
 import { BaseCommand } from ".";
 
-export default class Cccp extends BaseCommand {
+export default class Usa extends BaseCommand {
   constructor(){
     super({
-      name: "ソビエト",
-      alias: ["cccp", "ussr","ソビエト","ソ連","ソビエト連邦","ソビエト社会主義共和国連邦"],
-      description: "ソビエト社会主義共和国連邦の国歌を再生します。",
+      name: "アメリカ",
+      alias: ["usa","us", "america","アメリカ合衆国","アメリカ","合衆国"],
+      description: "アメリカ合衆国の国歌を再生します。",
       unlist: false,
       category: "player",
       permissionDescription: "なし",
