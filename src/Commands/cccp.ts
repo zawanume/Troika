@@ -49,9 +49,11 @@ export default class Cccp extends BaseCommand {
       await message.reply(":arrow_forward: 再生を再開します。").catch(e => Util.logger.log(e, "error"));
       return;
     }
-    await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo")
+
     server.player.stop();
-    await server.queue.next();
-    await server.player.play();
+    await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo",)
+    //server.player.stop();
+    //await server.queue.next();
+    //await server.player.play();
   }
 }
