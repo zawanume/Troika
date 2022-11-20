@@ -44,7 +44,7 @@ export default class Usa extends BaseCommand {
     }
 
     server.player.stop();
-    await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo");
+    await server.playFromURL(message, "https://www.youtube.com/watch?v=30FOxaYyVg0");
     await server.queue.removeAt(1);
   }
 }
