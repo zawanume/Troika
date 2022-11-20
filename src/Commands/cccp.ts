@@ -28,8 +28,8 @@ export default class Cccp extends BaseCommand {
   constructor(){
     super({
       name: "ソビエト",
-      alias: ["cccp", "ussr"],
-      description: "ソビエト社会主義連邦共和国の国歌を再生します。",
+      alias: ["cccp", "ussr","ソビエト","ソ連","ソビエト連邦","ソビエト社会主義共和国連邦"],
+      description: "ソビエト社会主義共和国連邦の国歌を再生します。",
       unlist: false,
       category: "player",
       permissionDescription: "なし",
@@ -46,12 +46,12 @@ export default class Cccp extends BaseCommand {
     // 一時停止されてるね
     if(options.rawArgs === "" && server.player.isPaused){
       server.player.resume();
-      await message.reply(":arrow_forward: 再生を再開します。").catch(e => Util.logger.log(e, "error"));
-      return;
+      //await message.reply(":arrow_forward: 再生を再開します。").catch(e => Util.logger.log(e, "error"));
+      //return;
     }
 
     server.player.stop();
-    await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo",)
+    await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo");
     await server.queue.removeAt(1);
   }
 }
