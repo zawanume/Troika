@@ -50,7 +50,8 @@ export default class Cccp extends BaseCommand {
       return;
     }
     await server.playFromURL(message, "https://www.youtube.com/watch?v=rwAns-qsMPo")
-    server.queue.next();
-    return;
+    server.player.stop();
+    await server.queue.next();
+    await server.player.play();
   }
 }
