@@ -69,7 +69,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
   protected readonly retryLimit = 3;
   protected _seek = 0;
   protected _errorReportChannel: TextChannel = null;
-  protected _volume = 100;
+  protected _volume = 30;
   protected _errorCount = 0;
   protected _errorUrl = "";
   protected _preparing = false;
@@ -305,7 +305,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
 
       this.logger.info("Play started successfully");
 
-      if(mes && !quiet){
+      /*if(mes && !quiet){
         // 再生開始メッセージ
         const messageContent = this.createNowPlayingMessage();
 
@@ -316,7 +316,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
             components: [],
           }).catch(this.logger.error);
         });
-      }
+      }*/
     }
     catch(e){
       this.handleError(e).catch(this.logger.error);
@@ -660,9 +660,9 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
       // キュー整理
       await this.server.queue.next();
     }
-    // キューがなくなったら接続終了
+    // キューがなくなったら停止
     if(this.server.queue.isEmpty){
-      await this.onQueueEmpty();
+      await this.stop();
     // なくなってないなら再生開始！
     }else{
       await this.play();

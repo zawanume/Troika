@@ -50,7 +50,8 @@ export async function onVoiceChannelLeave(
       await server.player.disconnect().catch(this.logger.error);
     }else if(server.player.isPlaying && !config.twentyFourSeven.includes(oldChannel.id) && !config.alwaysTwentyFourSeven){
       // 誰も聞いてる人がいない
-      if(
+      await server.player.disconnect().catch(this.logger.error);
+      /*if(
         server.player.currentAudioInfo.lengthSeconds > 60
         && server.player.currentAudioInfo.lengthSeconds - server.player.currentTime / 1000 < 10
       ){
@@ -93,7 +94,7 @@ export async function onVoiceChannelLeave(
         const playHandler = () => clearTimeout(timer);
         server.player.once("playCalled", playHandler);
         server.player.once("disconnect", playHandler);
-      }
+      }*/
     }else if(server.player.finishTimeout){
       await server.player.disconnect().catch(this.logger.error);
       await this._client.rest.channels.createMessage(
