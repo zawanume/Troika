@@ -51,6 +51,12 @@ export async function onVoiceChannelLeave(
     }else if(server.player.isPlaying && !config.twentyFourSeven.includes(oldChannel.id) && !config.alwaysTwentyFourSeven){
       // 誰も聞いてる人がいない
       await server.player.disconnect().catch(this.logger.error);
+      await this._client.rest.channels.createMessage(
+        server.boundTextChannel,
+        {
+          content: `:postbox: ${i18next.t("disconnected", { lng: server.locale })}`,
+        }
+      ).catch(this.logger.error);
       /*if(
         server.player.currentAudioInfo.lengthSeconds > 60
         && server.player.currentAudioInfo.lengthSeconds - server.player.currentTime / 1000 < 10
