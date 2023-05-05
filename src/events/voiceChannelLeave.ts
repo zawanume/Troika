@@ -48,7 +48,7 @@ export async function onVoiceChannelLeave(
   }else if(oldChannel.voiceMembers.has(this._client.user.id) && oldChannel.voiceMembers.size === 1){
     if(server.queue instanceof QueueManagerWithBgm && server.queue.isBGM){
       await server.player.disconnect().catch(this.logger.error);
-    }else if(server.player.isPlaying && !config.twentyFourSeven.includes(oldChannel.id) && !config.alwaysTwentyFourSeven){
+    }else if(!config.twentyFourSeven.includes(oldChannel.id) && !config.alwaysTwentyFourSeven){
       // 誰も聞いてる人がいない
       await server.player.disconnect().catch(this.logger.error);
       await this._client.rest.channels.createMessage(
