@@ -69,7 +69,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
   protected readonly retryLimit = 3;
   protected _seek = 0;
   protected _errorReportChannel: TextChannel = null;
-  protected _volume = 30;
+  protected _volume = 35;
   protected _errorCount = 0;
   protected _errorUrl = "";
   protected _preparing = false;
