@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 3
 ---
 # クローンして実行する
 リポジトリを [git](https://git-scm.com/) でクローンして実行することができます。
@@ -9,7 +9,7 @@ sidebar_position: 1
 
 ### 必須な環境
 
-- [Node.js](https://nodejs.org/) (v16.16以上のv16.x、v18.x)がサポートされていて、インストールされていること。
+- [Node.js](https://nodejs.org/) (v16.16以上のv16.x、v18.x、v20.x)がサポートされていて、インストールされていること。
 - [npm](https://www.npmjs.com/) が利用できること。
 - [ffmpeg](https://ffmpeg.org/) が利用できること。
 - [git](https://git-scm.com/) が利用できること。
@@ -90,6 +90,13 @@ npm run start
 なお、スラッシュコマンドは、起動時に自動的に追加されるようになりました。スラッシュコマンドについての詳細は、[あとのページ](../feature/1-slashcommand.md)で解説しています。
 
 ## コードの更新
+:::warning
+
+v3からv4の更新の際に、config.jsonでの設定内容が追加されています。
+追加しないと起動しないようになっていますので、必ずドキュメントサイトや[config.json.sample](https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/blob/master/config.json.sample)を参照の上更新してください。
+
+:::
+
 本ボットを最新のソースコードに更新するには、以下のような操作を行ってください。
 ```bash
 # ソースコードの更新
@@ -109,3 +116,23 @@ npm run onlystart
 npm run start
 ```
 :::
+
+<details>
+  <summary>新しいビルドスクリプトを使用する(ベータ版・v4.3以降)</summary>
+
+v4.3以降では、このページで紹介している`npm run build`によるビルドに加え、
+新しいビルドスクリプトを導入しています。  
+※Dockerイメージのビルド時にはこちらが使用されています。
+
+ベータ版ですが、出力されるファイル数が少なくなり、パフォーマンスが向上するため、
+ぜひお試しください。
+
+新しいビルドスクリプトは、`npm run build`の代わりに、
+```sh
+npm run build:bundled
+```
+を実行することでご利用いただけます。
+
+それ以外の手順やコマンドは同じとなります。
+
+</details>

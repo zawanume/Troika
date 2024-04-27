@@ -19,7 +19,7 @@
 import type { MusicBot } from "../bot";
 import type { AutocompleteInteraction } from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 
 export async function handleAutoCompleteInteraction(
   this: MusicBot,
@@ -29,7 +29,7 @@ export async function handleAutoCompleteInteraction(
   if(!option){
     return;
   }
-  
+
   const targetCommand = CommandManager.instance.resolve(interaction.data.name);
   const possibleOptions = targetCommand?.handleAutoComplete(
     option.name,

@@ -31,11 +31,12 @@ interface TypedEventEmitter<T extends EventDictionary> extends EventEmitter {
   once<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   prependListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   prependOnceListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
-  removeAllListeners(event: keyof T): this;
+  removeAllListeners(event?: keyof T): this;
   removeListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   rawListeners<U extends keyof T>(event: U): ((...args: T[U]) => void)[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 class TypedEventEmitter<T extends EventDictionary> extends EventEmitter {
   eitherOnce(events: (keyof T)[], listener: () => void){
     const handler = () => {

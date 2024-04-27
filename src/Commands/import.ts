@@ -20,13 +20,13 @@ import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
 import type { YmxFormat } from "../Structure";
 import type { i18n } from "i18next";
-import type { AnyGuildTextChannel, Message } from "oceanic.js";
+import type { AnyTextableGuildChannel, Message } from "oceanic.js";
 
 import candyget from "candyget";
 import { ApplicationCommandTypes } from "oceanic.js";
 
 import { BaseCommand } from ".";
-import { TaskCancellationManager } from "../Component/TaskCancellationManager";
+import { TaskCancellationManager } from "../Component/taskCancellationManager";
 import { YmxVersion } from "../Structure";
 import { useConfig } from "../config";
 
@@ -55,10 +55,10 @@ export default class Import extends BaseCommand {
     context.server.updateBoundChannel(message);
 
     const statusMessage = await message.reply(`🔍${t("commands:import.loadingMessage")}...`);
-    let targetMessage: Message<AnyGuildTextChannel> = null;
+    let targetMessage: Message<AnyTextableGuildChannel> | null = null;
     if(message["_interaction"] && "type" in message["_interaction"].data && message["_interaction"].data.type === ApplicationCommandTypes.MESSAGE){
-      targetMessage = message["_interaction"].data.resolved.messages.first() as Message<AnyGuildTextChannel>;
-      if(targetMessage.author?.id !== context.client.user.id){
+      targetMessage = message["_interaction"].data.resolved.messages.first() as Message<AnyTextableGuildChannel>;
+      if(targetMessage.author?.id !== context.client.user.id && !config.isWhiteListedBot(targetMessage.author?.id)){
         await statusMessage.edit(`❌${t("commands:import.notBotMessage")}`);
         return;
       }
@@ -69,10 +69,12 @@ export default class Import extends BaseCommand {
       }
       let force = false;
       let url = context.rawArgs;
+
       if(context.args.length >= 2 && context.args[0] === "force" && config.isBotAdmin(message.member.id)){
         force = true;
         url = context.args[1];
       }
+
       if(!url.startsWith("http://discord.com/channels/") && !url.startsWith("https://discord.com/channels/")){
         await message.reply(`❌${t("commands:import.noDiscordLink")}`).catch(this.logger.error);
         return;
@@ -88,9 +90,9 @@ export default class Import extends BaseCommand {
         // get the message
         const targetChannelId = ids[ids.length - 2];
         const targetMessageId = ids[ids.length - 1];
-        const channel = await context.client.rest.channels.get<AnyGuildTextChannel>(targetChannelId);
+        const channel = await context.client.rest.channels.get<AnyTextableGuildChannel>(targetChannelId);
         targetMessage = channel.guild && await channel.getMessage(targetMessageId);
-        if(targetMessage.author?.id !== context.client.user.id && !force){
+        if(targetMessage.author?.id !== context.client.user.id && !force && !config.isWhiteListedBot(targetMessage.author?.id)){
           await statusMessage.edit(`❌${t("commands:import.notBotMessage")}`);
           return;
         }
@@ -98,6 +100,7 @@ export default class Import extends BaseCommand {
       catch(e){
         this.logger.error(e);
         statusMessage?.edit(`:sob:${t("failed")}...`).catch(this.logger.error);
+        return;
       }
     }
 
@@ -133,17 +136,18 @@ export default class Import extends BaseCommand {
               })
             );
           }
-          if(cancellation.Cancelled) break;
+          if(cancellation.cancelled){
+            break;
+          }
         }
 
-        if(!cancellation.Cancelled){
+        if(!cancellation.cancelled){
           await statusMessage.edit(`✅${t("songProcessingCompleted", { count: qs.length })}`);
         }else{
           await statusMessage.edit(`✅${t("canceled")}`);
         }
       }else{
         await statusMessage.edit(`❌${t("commands:import.contentNotIncludedInMessage")}`);
-        return;
       }
     }
     catch(e){

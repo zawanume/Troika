@@ -16,47 +16,37 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { exportableCustom, UrlStreamInfo } from ".";
+import type { AudioSourceBasicJsonFormat, UrlStreamInfo } from ".";
 import type { i18n } from "i18next";
 
-import twitterDl from "twitter-url-direct";
+import candyget from "candyget";
+import * as htmlEntities from "html-entities";
 
 import { AudioSource } from "./audiosource";
+import { retrieveRemoteAudioInfo } from "../Util";
 
-export class Twitter extends AudioSource<string> {
+export class Twitter extends AudioSource<string, TwitterJsonFormat> {
   private streamUrl = "";
 
-  constructor(){
-    super("twitter");
-  }
-
-  async init(url: string, prefetched: exportableTwitter, t: i18n["t"]){
+  async init(url: string, prefetched: TwitterJsonFormat | null, t: i18n["t"]){
     this.url = url;
-    if(!Twitter.validateUrl(url)) throw new Error("Invalid streamable url");
+    if(!Twitter.validateUrl(url)) throw new Error("Invalid Twitter url.");
     if(prefetched){
       this.lengthSeconds = prefetched.length;
       this.title = prefetched.title;
       this.streamUrl = prefetched.streamUrl;
     }else{
       const streamInfo = await twitterDl(url.split("?")[0]);
-      if(!streamInfo.found){
-        throw new Error("error" in streamInfo && streamInfo.error);
+      if(!streamInfo.videoUrl){
+        throw new Error("Invalid Twitter url.");
       }
 
-      this.lengthSeconds = Math.floor(streamInfo.duration);
-      this.title = t("audioSources.tweet", { name: streamInfo.tweet_user.name, id: streamInfo.tweet_user.username });
-      if(!streamInfo.download){
-        throw new Error("No media found");
-      }
-      this.streamUrl = streamInfo.download.sort((a, b) => {
-        const getDimensionFactor = (dimension: string) => dimension.split("x").reduce((prev, current) => prev + Number(current), 1);
-        return getDimensionFactor(b.dimension) - getDimensionFactor(a.dimension);
-      })[0]?.url;
-      this.description = streamInfo.tweet_user.text;
+      const audioInfo = await retrieveRemoteAudioInfo(streamInfo.videoUrl);
+      this.lengthSeconds = audioInfo.lengthSeconds || 0;
 
-      if(!this.streamUrl){
-        throw new Error("No format found");
-      }
+      this.title = t("audioSources.tweet", { name: streamInfo.displayName, id: streamInfo.screenName });
+      this.streamUrl = streamInfo.videoUrl;
+      this.description = streamInfo.content;
     }
     return this;
   }
@@ -88,7 +78,7 @@ export class Twitter extends AudioSource<string> {
     return "";
   }
 
-  exportData(): exportableTwitter{
+  exportData(): TwitterJsonFormat{
     return {
       url: this.url,
       length: this.lengthSeconds,
@@ -98,10 +88,53 @@ export class Twitter extends AudioSource<string> {
   }
 
   static validateUrl(url: string){
-    return !!url.match(/^https?:\/\/twitter\.com\/[a-zA-Z0-9_-]+\/status\/\d+(\?.+)?$/);
+    return !!url.match(/^https?:\/\/(twitter|x)\.com\/[a-zA-Z0-9_-]+\/status\/\d+(\?.+)?$/);
   }
 }
 
-export type exportableTwitter = exportableCustom & {
+export type TwitterJsonFormat = AudioSourceBasicJsonFormat & {
   streamUrl: string,
 };
+
+type Tweet = {
+  displayName: string | null,
+  screenName: string | null,
+  content: string,
+  videoUrl: string | null,
+};
+
+const mediaTypeRegExp = /<meta\s+property="twitter:card"\s+content="(?<type>.+?)"\/>/;
+const twitterSiteRegExp = /<meta\s+property="twitter:site"\s+content="@(?<id>.+?)"\/>/;
+const twitterTitleRegExp = /<meta\s+property="twitter:title"\s+content="(?<title>.+?)"\/>/;
+const ogDescriptionRegExp = /<meta\s+property="og:description"\s+content="(?<content>.+?)"\/>/s;
+const ogVideoRegExp = /<meta\s+property="og:video"\s+content="(?<url>.+?)"\/>/;
+async function twitterDl(url: string): Promise<Tweet> {
+  const result = await candyget.string(url.replace(/https?:\/\/(x|twitter)\.com/, "https://fxtwitter.com"), {
+    headers: Object.assign({}, candyget.defaultOptions.headers, {
+      "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+    }),
+  });
+
+  if(result.statusCode !== 200){
+    throw new Error("An error occurred while fetching data.");
+  }
+
+  const type = mediaTypeRegExp.exec(result.body)?.groups?.type;
+  if(type !== "player"){
+    throw new Error("Provided URL includes no videos.");
+  }
+
+  const screenName = twitterSiteRegExp.exec(result.body)?.groups?.id || null;
+  const displayName = (twitterTitleRegExp.exec(result.body)?.groups?.title || "")
+    .replace(new RegExp(`\\(@${screenName}\\)$`), "")
+    .trimEnd() || null;
+  const content = htmlEntities.decode(ogDescriptionRegExp.exec(result.body)?.groups?.content || "");
+  const videoUrl = ogVideoRegExp.exec(result.body)?.groups?.url || null;
+
+  return {
+    displayName,
+    screenName,
+    content,
+    videoUrl,
+  };
+}

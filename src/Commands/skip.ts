@@ -36,7 +36,7 @@ export default class Skip extends BaseCommand {
 
   async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
     const server = context.server;
-    // そもそも再生状態じゃないよ...
+    // そもそも再生状態じゃない
     if(server.player.preparing){
       message.reply(t("commands:skip.preparing")).catch(this.logger.error);
       return;
@@ -57,7 +57,8 @@ export default class Skip extends BaseCommand {
       if(
         item.additionalInfo.addedBy.userId !== message.member.id
         && !discordUtil.users.isDJ(message.member, context)
-        && !discordUtil.users.isPrivileged(message.member) && members.size > 3
+        && !discordUtil.users.isPrivileged(message.member)
+        && members && members.size > 3
       ){
         // 投票パネルを作成する
         if(!server.skipSession){
@@ -83,7 +84,8 @@ export default class Skip extends BaseCommand {
         },
       }).catch(this.logger.error);
 
-      server.player.play().catch(this.logger.error);
+      await server.player.play().catch(this.logger.error);
+
       if(server.queue.isEmpty){
         await server.player.onQueueEmpty();
       }

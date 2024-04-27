@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 3
 ---
 # クローンして実行する
 リポジトリを [git](https://git-scm.com/) でクローンして実行することができます。
@@ -9,7 +9,7 @@ sidebar_position: 1
 
 ### 必須な環境
 
-- [Node.js](https://nodejs.org/) (v16.16以上のv16.x、v18.x)がサポートされていて、インストールされていること。
+- [Node.js](https://nodejs.org/) (v16.16以上のv16.x、v18.x、v20.x)がサポートされていて、インストールされていること。
 - [npm](https://www.npmjs.com/) が利用できること。
 - [ffmpeg](https://ffmpeg.org/) が利用できること。
 - [git](https://git-scm.com/) が利用できること。
@@ -90,6 +90,13 @@ npm run start
 なお、スラッシュコマンドは、起動時に自動的に追加されるようになりました。スラッシュコマンドについての詳細は、[あとのページ](../feature/slashcommand.md)で解説しています。
 
 ## コードの更新
+:::warning
+
+v3からv4の更新の際に、config.jsonでの設定内容が追加されています。
+追加しないと起動しないようになっていますので、必ずドキュメントサイトや[config.json.sample](https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/blob/master/config.json.sample)を参照の上更新してください。
+
+:::
+
 本ボットを最新のソースコードに更新するには、以下のような操作を行ってください。
 ```bash
 # ソースコードの更新

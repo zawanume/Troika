@@ -17,8 +17,9 @@
  */
 
 import type { CommandArgs } from ".";
-import type { SongInfo } from "../Component/SearchPanel";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
+import type { SongInfo } from "../Component/searchPanel";
+import type * as dYtsr from "@distube/ytsr";
 import type { i18n } from "i18next";
 import type * as ytsr from "ytsr";
 
@@ -27,6 +28,7 @@ import { MessageActionRowBuilder, MessageButtonBuilder } from "@mtripg6666tdr/oc
 import { BaseCommand } from ".";
 import { searchYouTube } from "../AudioSource";
 import { useConfig } from "../config";
+import { DefaultAudioThumbnailURL } from "../definition";
 
 export abstract class SearchBase<T> extends BaseCommand {
   async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
@@ -55,6 +57,7 @@ export abstract class SearchBase<T> extends BaseCommand {
         .createCustomIds({
           cancelSearch: "button",
         });
+
       const responseMessage = await message.reply({
         content: `✘${t("search.alreadyOpen")}`,
         components: [
@@ -68,15 +71,20 @@ export abstract class SearchBase<T> extends BaseCommand {
             .toOceanic(),
         ],
       }).catch(this.logger.error);
+
       if(responseMessage){
         const panel = context.server.searchPanel.get(message.member.id);
+        if(!panel) return;
+
         collector.on("cancelSearch", interaction => {
           panel.destroy({ quiet: true }).catch(this.logger.error);
           interaction.createFollowup({
             content: `🚮${t("search.previousPanelRemoved")}:white_check_mark:`,
           }).catch(this.logger.error);
         });
+
         collector.setMessage(responseMessage);
+
         panel.once("destroy", () => collector.destroy());
       }
       return;
@@ -88,13 +96,16 @@ export abstract class SearchBase<T> extends BaseCommand {
       if(!searchPanel){
         return;
       }
-      await searchPanel.consumeSearchResult(this.searchContent(context.rawArgs, context, t), this.consumer, t);
+      await searchPanel.consumeSearchResult(this.searchContent(context.rawArgs, context, t), this.consumer.bind(this), t);
     }else{
       await message.reply(t("commands:search.noArgument")).catch(this.logger.error);
     }
   }
 
-  /** 検索を実行する関数 */
+  /**
+   * 検索を実行する関数  
+   * 検索時にクエリーの変換を行う場合は、変換後のクエリをtransfomedQueryとして返す必要があります。
+   */
   protected abstract searchContent(query: string, context: CommandArgs, t: i18n["t"]): Promise<T|{ result: T, transformedQuery: string }>;
 
   /** 検索結果を検索パネルで使用できるデータに変換する関数 */
@@ -109,7 +120,7 @@ export abstract class SearchBase<T> extends BaseCommand {
 
 const config = useConfig();
 
-export default class Search extends SearchBase<ytsr.Video[]> {
+export default class Search extends SearchBase<ytsr.Video[] | dYtsr.Video[]> {
   constructor(){
     super({
       alias: ["search", "se"],
@@ -131,20 +142,20 @@ export default class Search extends SearchBase<ytsr.Video[]> {
   protected override async searchContent(query: string, context: CommandArgs){
     return searchYouTube(query)
       .then(result => {
-        const videos = result.items.filter(item => item.type === "video") as ytsr.Video[];
+        const videos = (result.items as (ytsr.Item | dYtsr.Video)[]).filter(item => item.type === "video") as ytsr.Video[] | dYtsr.Video[];
         context.bot.cache.addSearch(query, videos);
         return videos;
       });
   }
 
-  protected override consumer(items: ytsr.Video[], t: i18n["t"]){
+  protected override consumer(items: ytsr.Video[] | dYtsr.Video[], t: i18n["t"]){
     return items.map(item => ({
       url: item.url,
-      title: item.title,
-      duration: item.duration,
-      thumbnail: item.bestThumbnail.url,
-      author: item.author.name,
-      description: `${t("length")}: ${item.duration}, ${t("channelName")}: ${item.author.name}`,
+      title: "title" in item ? item.title : `*${item.name}`,
+      duration: item.duration || "0",
+      thumbnail: ("bestThumbnail" in item ? item.bestThumbnail.url : item.thumbnail) || DefaultAudioThumbnailURL,
+      author: item.author?.name || t("unknown"),
+      description: `${t("length")}: ${item.duration}, ${t("channelName")}: ${item.author?.name || t("unknown")}`,
     })).filter(n => n);
   }
 

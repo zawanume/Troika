@@ -17,14 +17,16 @@
  */
 
 import type { CommandArgs } from "../Commands";
-import type { AnyGuildTextChannel, Member, PermissionName } from "oceanic.js";
+import type { AnyTextableGuildChannel, Member, PermissionName } from "oceanic.js";
+
+import { useConfig } from "../config";
+
+const config = useConfig();
 
 export const users = {
-  getDisplayName(member: Member){
-    return member.nick || member.username;
-  },
   isDJ(member: Member, options: CommandArgs){
-    return channels.sameVC(member, options) && member.roles.some(roleId => member.guild.roles.get(roleId).name === "DJ");
+    return channels.sameVC(member, options)
+      && member.roles.some(roleId => config.djRoleNames.includes(member.guild.roles.get(roleId)!.name));
   },
   isPrivileged(member: Member){
     return member.permissions.has("MANAGE_GUILD")
@@ -43,13 +45,13 @@ const requirePermissions = [
 ] as Readonly<PermissionName[]>;
 
 export const channels = {
-  checkSendable(channel: AnyGuildTextChannel, userId: string){
+  checkSendable(channel: AnyTextableGuildChannel, userId: string){
     const permissions = channel.permissionsOf(userId);
     return requirePermissions.every(permission => permissions.has(permission));
   },
   getVoiceMember(options: CommandArgs){
     if(!options.server.player.isConnecting) return null;
-    return options.server.connectingVoiceChannel.voiceMembers || null;
+    return options.server.connectingVoiceChannel!.voiceMembers || null;
   },
   sameVC(member: Member, options: CommandArgs){
     return this.getVoiceMember(options)?.has(member.id) || false;

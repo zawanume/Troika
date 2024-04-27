@@ -21,14 +21,13 @@ import type { CommandMessage } from "../Component/commandResolver/CommandMessage
 import type { i18n } from "i18next";
 
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
-
 import candyget from "candyget";
 import * as Genius from "genius-lyrics";
 import { decode } from "html-entities";
 import { convert } from "html-to-text";
 
 import { BaseCommand } from ".";
-import { discordUtil, color } from "../Util";
+import { color } from "../Util";
 import { DefaultAudioThumbnailURL } from "../definition";
 
 export default class Lyrics extends BaseCommand {
@@ -74,7 +73,7 @@ export default class Lyrics extends BaseCommand {
       ;
       embeds[embeds.length - 1]
         .setFooter({
-          text: discordUtil.users.getDisplayName(message.member),
+          text: message.member.displayName,
           iconURL: message.member.avatarURL(),
         })
       ;
@@ -134,12 +133,12 @@ async function getLyrics(keyword: string): Promise<songInfo>{
     ;
     lyric = convert(lyric);
     const match = doc.match(/<meta name="description" content="(?<artist>.+?)が歌う(?<title>.+)の歌詞ページ.+です。.+">/);
-    const artwork = doc.match(/<img src="(?<url>.+?)" alt=".+? 歌詞" \/>/).groups?.url;
+    const artwork = doc.match(/<img src="(?<url>.+?)" alt=".+? 歌詞" \/>/)?.groups?.url;
     return {
       lyric: decode(lyric),
-      artist: decode(match.groups.artist),
-      title: decode(match.groups.title),
-      artwork: artwork.startsWith("http") ? artwork : DefaultAudioThumbnailURL,
+      artist: decode(match?.groups?.artist),
+      title: decode(match?.groups?.title),
+      artwork: artwork?.startsWith("http") ? artwork : DefaultAudioThumbnailURL,
       url: url,
     };
   }

@@ -16,8 +16,9 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { baseYoutubeDlStrategy } from "./baseYoutubeDlStrategy";
-import { BinaryManager } from "../../../Component/BinaryManager";
+import { Cache } from "./base";
+import { YoutubeDlInfo, baseYoutubeDlStrategy } from "./baseYoutubeDlStrategy";
+import { BinaryManager } from "../../../Component/binaryManager";
 
 const youtubeDlBinaryManager = new BinaryManager({
   binaryName: "youtube-dl",
@@ -32,6 +33,10 @@ const youtubeDl: youtubeDl = "youtubeDl";
 export class youtubeDlStrategy extends baseYoutubeDlStrategy<youtubeDl> {
   constructor(priority: number){
     super(priority, youtubeDl, youtubeDlBinaryManager);
+  }
+
+  protected override cacheIsValid(cache?: Cache<any, any> | undefined): cache is Cache<youtubeDl, YoutubeDlInfo> {
+    return cache?.type === youtubeDl;
   }
 }
 

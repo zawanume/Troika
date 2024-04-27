@@ -23,7 +23,7 @@ import type { MusicBot } from "../bot";
 import i18next from "i18next";
 import * as discord from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { CommandMessage } from "../Component/commandResolver/CommandMessage";
 import { GuildDataContainerWithBgm } from "../Structure/GuildDataContainerWithBgm";
 import { discordUtil } from "../Util";
@@ -65,11 +65,6 @@ export async function handleCommandInteraction(this: MusicBot, server: GuildData
   if(shouldIgnoreInteractionByBgmConfig(server, command)){
     // BGM設定上コマンドが使えない場合、無視して返却
     return;
-  }
-
-  // 応答遅延するべきコマンドならば遅延
-  if(command.shouldDefer){
-    await interaction.defer();
   }
 
   // メッセージライクに解決してコマンドメッセージに

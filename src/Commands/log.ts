@@ -21,9 +21,10 @@ import type { CommandMessage } from "../Component/commandResolver/CommandMessage
 import type { i18n } from "i18next";
 import type { EmbedOptions } from "oceanic.js";
 
+import * as os from "os";
+
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
-import * as os from "os";
 
 import { BaseCommand } from ".";
 import * as Util from "../Util";
@@ -99,7 +100,7 @@ export default class SystemInfo extends BaseCommand {
           ]
             .map(mod => {
               try{
-                return `\`${mod}\`@v${require(`../../node_modules/${mod}/package.json`).version}`;
+                return `\`${mod}\`@v${require(`${mod}/package.json`).version}`;
               }
               catch{
                 return `\`${mod}\`@unknown`;
@@ -116,7 +117,7 @@ export default class SystemInfo extends BaseCommand {
       let logs: string[] = [...getLogs()];
       logs.reverse();
       for(let i = 0; i < logs.length; i++){
-        if(logs.join("\r\n").length < 1950) break;
+        if(logs.join("\r\n").length < 3950) break;
         logs = logs.slice(0, -1);
       }
       logs.reverse();
@@ -149,7 +150,7 @@ export default class SystemInfo extends BaseCommand {
     }
 
     if(config.isBotAdmin(message.member.id) && (context.args[0] === "server" && context.args[1] && context.client.guilds.has(context.args[1]))){
-      const target = context.client.guilds.get(context.args[1]);
+      const target = context.client.guilds.get(context.args[1])!;
       const data = context.bot.getData(context.args[1]);
       embeds.push(
         new MessageEmbedBuilder()
@@ -170,7 +171,7 @@ export default class SystemInfo extends BaseCommand {
             data?.player.currentAudioInfo?.isYouTube() && data?.player.currentAudioInfo.isLiveStream ? t("yes") : t("no"),
             true
           )
-          .setThumbnail(target.iconURL())
+          .setThumbnail(target.iconURL()!)
           .toOceanic()
       );
     }
@@ -224,7 +225,7 @@ export default class SystemInfo extends BaseCommand {
           .toOceanic()
       );
     }
-    
+
     if(embeds.length > 0){
       await message.channel.createMessage({ embeds }).catch(this.logger.error);
     }

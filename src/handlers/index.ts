@@ -19,4 +19,5 @@
 export * from "./autoCompleteInteraction";
 export * from "./commandInteraction";
 export * from "./buttonInteraction";
+export * from "./modalSubmitInteraction";
 export * from "./selectMenuInteraction";

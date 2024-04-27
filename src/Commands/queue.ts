@@ -33,7 +33,7 @@ export default class Queue extends BaseCommand {
       unlist: false,
       category: "playlist",
       argument: [{
-        type: "integer",
+        type: "integer" as const,
         name: "page",
         required: false,
       }],
@@ -77,7 +77,7 @@ export default class Queue extends BaseCommand {
               ? t("components:nowplaying.nowplayingItemName")
               : t("components:nowplaying.waitForPlayingItemName"),
           value: [
-            `[${q.basicInfo.title}](${q.basicInfo.url})`,
+            q.basicInfo.isPrivateSource ? q.basicInfo.title : `[${q.basicInfo.title}](${q.basicInfo.url})`,
             `${t("length")}: \`${
               q.basicInfo.isYouTube() && q.basicInfo.isLiveStream
                 ? t("commands:log.liveStream")
@@ -107,7 +107,7 @@ export default class Queue extends BaseCommand {
             `${t("components:queue.equallyplayback")}:${context.server.equallyPlayback ? "⭕" : "❌"}`,
           ].join(" | "),
         })
-        .setThumbnail(message.guild.iconURL())
+        .setThumbnail(message.guild.iconURL()!)
         .setColor(getColor("QUEUE"))
         .toOceanic()
       ;

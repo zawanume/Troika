@@ -21,15 +21,17 @@ replitなど、環境変数の設定方法が特殊な場合もあるため、re
 :::
 
 ### `TOKEN`  
-  ボットのトークンです。Discord Developer Portalから取得してください。
+  ボットのトークンです。[Discord Developer Portal](https://discord.com/developers/applications)から取得してください。
 ### `CSE_KEY`  
-  歌詞検索に使用するGoogle Custom Searchのkeyです。(任意指定)
+  歌詞検索に使用する[Google Custom Search](https://developers.google.com/custom-search/v1/introduction?hl=ja)のkeyです。(任意指定)
 ### `DB_URL`  
   「キューやループの有効無効等のデータのバックアップ」に使用するデータベースサーバーのURLです。(任意指定)  
   サーバーの仕様等については[バックアップ](../backup/overview.md)を参照してください。
 ### `DB_TOKEN`
   「キューやループの有効無効等のデータのバックアップ」に使用するデータベースサーバーのトークンです。(任意指定)  
   サーバーの仕様等については[バックアップ](../backup/overview.md)を参照してください。
+### `PORT`
+  `config.json`で`webserver`を`true`にした場合に作成されるWebサーバーのポートを指定できます。(任意指定)
 ### `LOG_TRANSFER_PORT`
   内部的に、ロガーで使用されるTCPポートの番号を指定します。(任意指定)  
   複数のボットを同時稼働する際には、それぞれのボットで違う値を設定する必要があります。  
@@ -40,7 +42,7 @@ replitなど、環境変数の設定方法が特殊な場合もあるため、re
 
 こちらにはボットの設定情報などを記述します。  
 
-:::caution
+:::warning
 任意指定の設定に関しては、**値をnullにしてください("null"ではなくnull)**  
 例：
 
@@ -80,13 +82,10 @@ replitなど、環境変数の設定方法が特殊な場合もあるため、re
 ### `maintenance` (boolean)  
   メンテナンス用の構成で起動するか。メンテナンス用構成では、`adminId`で指定した管理者以外からのコマンドをすべて無視するようになります。
 
-### `errorChannel` (string|null)  
+### `errorChannel` (string | null)  
   エラーレポートを送信するテキストチャンネルのID。設定しない場合は`null`
 
-### `proxy` (string|null)  
-  プロキシを使用する場合はそのURL。設定しない場合は`null`
-
-### `prefix` (string|null)  
+### `prefix` (string | null)  
   指定する場合は一文字でデフォルトプレフィックスを指定してください。  
 
 ### `webserver` (boolean)  
@@ -97,7 +96,7 @@ replitなど、環境変数の設定方法が特殊な場合もあるため、re
   詳細は、[BGM機能](../feature/bgm)を参照してください。
 
 ### `noMessageContent` (boolean)
-  Message Content IntentがDiscord Developers Portalで無効になっている場合は、`true`に設定してください。  
+  Message Content Intentが[Discord Developer Portal](https://discord.com/developers/applications)で無効になっている場合は、`true`に設定してください。  
   デフォルトは`false`です。  
 
 ### `twentyFourSeven` (string[])
@@ -129,6 +128,37 @@ replitなど、環境変数の設定方法が特殊な場合もあるため、re
 
 ### `country` (string)
   ボットがメインとする国コードを設定します。日本であれば`"JP"`です。
+
+### `botWhiteList` (string[] | null | undefined)
+  本ボットを複数台のボットでホストしている場合、ここにお互いのボットのユーザーIDを指定することで、相互運用がしやすくなります。  
+  現時点では、具体的には`インポート`および`再生`コマンドで、お互いのメッセージに反応できるようになります。  
+  例えば、`ボットA`で`エクスポート`コマンドで出力したキューを`ボットB`でインポートする、などができるようになります。
+  :::warning
+  相互運用しているボットは、できるだけ同じバージョンを使用するようにしてください。バージョンが異なる場合、予期しない動作をする可能性があります。
+  :::
+
+### `djRoleNames` (string[] | null | undefined)
+  本ボットでDJロールとして認識されるロールの名前を変更できます。  
+  何も指定しないと`DJ`という名前のロールがDJロールとして認識されます。  
+  DJロールがついているユーザーは、他のユーザーより操作できることが多くなります。詳しくは、[コマンド使用時の権限](../command-permissions.md)をご確認ください。
+
+<details>
+<summary>そのほかの非推奨の設定項目</summary>
+
+:::danger
+これらの設定は現在非推奨です。将来のリリースで完全に削除される可能性があります。
+:::
+
+### `proxy` (string|null)  
+(v4.1から非推奨)
+  プロキシを使用する場合はそのURL。設定しない場合は`null`
+
+:::note
+一部の音楽ソースの取得に使用されます。
+:::
+
+</details>
+
 
 ---
 

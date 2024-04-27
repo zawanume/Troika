@@ -21,7 +21,7 @@ import type { playDlStrategy } from "./play-dl";
 import type { youtubeDlStrategy } from "./youtube-dl";
 import type { ytDlPStrategy } from "./yt-dlp";
 import type { ytdlCoreStrategy } from "./ytdl-core";
-import type { ytDlPatchedYoutubeDl } from "./ytdl-patched_youtube-dl";
+import type { YtDlPatchedYoutubeDl } from "./ytdl-patched_youtube-dl";
 
 import { useConfig } from "../../../config";
 import { getLogger } from "../../../logger";
@@ -31,21 +31,21 @@ type strategies =
   | playDlStrategy
   | youtubeDlStrategy
   | ytDlPStrategy
-  | ytDlPatchedYoutubeDl
+  | YtDlPatchedYoutubeDl
 ;
 
 const logger = getLogger("Strategies");
 const config = useConfig();
 
 export const strategies: strategies[] = [
-  "./ytdl-core",
-  "./play-dl",
-  "./youtube-dl",
-  "./yt-dlp",
-  "./ytdl-patched_youtube-dl",
-].map((path, i) => {
+  () => require("./ytdl-core"),
+  () => require("./play-dl"),
+  () => require("./youtube-dl"),
+  () => require("./yt-dlp"),
+  () => require("./ytdl-patched_youtube-dl"),
+].map((_import, i) => {
   try{
-    const { default: Module } = require(path);
+    const { default: Module } = _import();
     return new Module(i);
   }
   catch(e){
@@ -60,7 +60,8 @@ export const strategies: strategies[] = [
 export async function attemptFetchForStrategies<T extends Cache<string, U>, U>(...parameters: Parameters<Strategy<T, U>["fetch"]>){
   let checkedStrategy = -1;
   if(parameters[2]){
-    checkedStrategy = strategies.findIndex(s => s && s.cacheType === parameters[2].type);
+    const cacheType = parameters[2].type;
+    checkedStrategy = strategies.findIndex(s => s && s.cacheType === cacheType);
     if(checkedStrategy >= 0){
       try{
         const result = await strategies[checkedStrategy].fetch(...parameters);

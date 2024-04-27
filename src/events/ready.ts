@@ -21,7 +21,7 @@ import type { MusicBot } from "../bot";
 import i18next from "i18next";
 import * as discord from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { useConfig } from "../config";
 
 const config = useConfig();
@@ -82,9 +82,9 @@ export async function onReady(this: MusicBot){
         const id = guildQueueIds[i];
         if(guildStatusIds.includes(id)){
           try{
-            const server = this.initData(id, guildStatuses.get(id).boundChannelId);
-            await server.importQueue(guildQueues.get(id));
-            server.importStatus(guildStatuses.get(id));
+            const server = this.initData(id, guildStatuses.get(id)!.boundChannelId);
+            await server.importQueue(guildQueues.get(id)!);
+            server.importStatus(guildStatuses.get(id)!);
           }
           catch(e){
             this.logger.warn(e);

@@ -33,16 +33,16 @@ type DSLOptions = {
  */
 // eslint-disable-next-line @typescript-eslint/ban-types
 export class DSL extends LogEmitter<{}> {
-  protected csvLog: string[] = null;
+  protected csvLog: string[] | null = null;
   protected logStreams: Readable[] = [];
-  protected logFileName: string = null;
-  protected logFileStream: fs.WriteStream = null;
+  protected logFileName: string | null = null;
+  protected logFileStream: fs.WriteStream | null = null;
 
   constructor(protected options: DSLOptions){
     super("DSL");
     this.logger.warn("CSV based detailed log enabled.");
     if(options.enableFileLog){
-      this.logFileName = path.join(__dirname, `../../../logs/stream-${Date.now()}.csv`);
+      this.logFileName = path.join(__dirname, `${global.BUNDLED ? "../" : "../../"}../logs/stream-${Date.now()}.csv`);
       this.logFileStream = fs.createWriteStream(this.logFileName);
       this.logFileStream.once("close", () => this.logger.info("CSV file closed"));
       this.logger.warn(`CSV filename will be ${this.logFileName}`);
@@ -52,7 +52,7 @@ export class DSL extends LogEmitter<{}> {
     this.appendCsvLog("type,datetime,id,total,current");
   }
 
-  getCsvLog(): readonly string[] {
+  getCsvLog(): readonly string[] | null {
     return this.csvLog;
   }
 
@@ -70,7 +70,7 @@ export class DSL extends LogEmitter<{}> {
         if(inx >= 0){
           this.logStreams.splice(inx, 1);
           this.logger.info(this.logStreams);
-          if(this.logStreams.length === 0 && !this.logFileStream.destroyed){
+          if(this.logStreams.length === 0 && this.logFileStream && !this.logFileStream.destroyed){
             this.logFileStream.destroy();
             this.logger.info("CSV log saved successfully");
           }

@@ -20,15 +20,29 @@ import type { WithId, spawnerJobMessage, workerMessage } from "./spawner";
 
 import { parentPort } from "worker_threads";
 
-import * as ytsr from "ytsr";
+import ytsr from "ytsr";
 
 import { YouTube } from ".";
-import { stringifyObject } from "../../Util";
+import { requireIfAny, stringifyObject } from "../../Util";
+import { useConfig } from "../../config";
+
+if(!parentPort){
+  throw new Error("This file should be run in worker thread.");
+}
+
+const dYtsr = requireIfAny("@distube/ytsr") as typeof import("@distube/ytsr");
+
+const config = useConfig();
+const searchOptions = {
+  limit: 12,
+  gl: config.country,
+  hl: config.defaultLanguage,
+};
 
 parentPort.unref();
 
 function postMessage(message: workerMessage|WithId<workerMessage>){
-  parentPort.postMessage(message);
+  parentPort!.postMessage(message);
 }
 
 function onMessage(message: WithId<spawnerJobMessage>){
@@ -41,6 +55,7 @@ function onMessage(message: WithId<spawnerJobMessage>){
     youtube.init(url, prefetched, null, forceCache)
       .then(() => {
         const data = Object.assign({}, youtube);
+        // @ts-expect-error
         delete data["logger"];
         postMessage({
           type: "initOk",
@@ -57,17 +72,30 @@ function onMessage(message: WithId<spawnerJobMessage>){
       });
   }else if(message.type === "search"){
     const id = message.id;
-    ytsr.default(message.keyword, {
-      limit: 12,
-      gl: "JP",
-      hl: "ja",
-    })
-      .then((result) => {
+    ytsr(message.keyword, searchOptions)
+      .then(result => {
         postMessage({
           type: "searchOk",
           data: result,
           id,
         });
+      })
+      .catch((er) => {
+        console.error(er);
+        if(dYtsr){
+          return dYtsr(message.keyword, searchOptions);
+        }else{
+          throw er;
+        }
+      })
+      .then(result => {
+        if(result){
+          postMessage({
+            type: "searchOk",
+            data: result,
+            id,
+          });
+        }
       })
       .catch((er) => {
         postMessage({

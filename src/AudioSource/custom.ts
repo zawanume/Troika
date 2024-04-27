@@ -16,41 +16,55 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { UrlStreamInfo } from ".";
+import type { AudioSourceBasicJsonFormat, StreamInfo } from ".";
 import type { i18n } from "i18next";
 
 import { AudioSource } from "./audiosource";
-import { isAvailableRawAudioURL, retriveLengthSeconds } from "../Util";
+import { createFragmentalDownloadStream, downloadAsReadable, isAvailableRawAudioURL, requestHead, retrieveRemoteAudioInfo } from "../Util";
 
-export class CustomStream extends AudioSource<string> {
+export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat> {
   constructor(){
-    super("custom");
-    this._unableToCache = true;
+    super({ isCacheable: false });
   }
 
-  async init(url: string, prefetched: exportableCustom, t: i18n["t"]){
+  async init(url: string, prefetched: AudioSourceBasicJsonFormat | null, t: i18n["t"]){
     if(prefetched){
       this.title = prefetched.title || t("audioSources.customStream");
       this.url = url;
       this.lengthSeconds = prefetched.length;
-    }else{
-      if(!isAvailableRawAudioURL(url)){
-        throw new Error(t("audioSources.invalidStream"));
-      }
+    }else if(isAvailableRawAudioURL(url)){
       this.url = url;
-      this.title = this.extractFilename() || t("audioSources.customStream");
-      try{
-        this.lengthSeconds = await retriveLengthSeconds(url);
-      }
-      catch{ /* empty */ }
+      const info = await retrieveRemoteAudioInfo(url);
+      this.title = info.displayTitle || this.extractFilename() || t("audioSources.customStream");
+      this.lengthSeconds = info.lengthSeconds || 0;
+    }else{
+      throw new Error(t("audioSources.invalidStream"));
     }
+
+    this.isPrivateSource = this.url.startsWith("https://cdn.discordapp.com/ephemeral-attachments/");
+
     return this;
   }
 
-  async fetch(): Promise<UrlStreamInfo>{
+  async fetch(url?: boolean): Promise<StreamInfo>{
+    if(url){
+      return {
+        type: "url",
+        url: this.url,
+        streamType: "unknown",
+      };
+    }
+
+    const headRes = await requestHead(this.url);
+    const acceptRanges = headRes.headers["accept-ranges"];
+    const contentLengthStr = headRes.headers["content-length"];
+    const stream = acceptRanges?.includes("bytes") && contentLengthStr && /^\d+$/.test(contentLengthStr)
+      ? createFragmentalDownloadStream(this.url, { contentLength: Number(contentLengthStr) })
+      : downloadAsReadable(this.url);
+
     return {
-      type: "url",
-      url: this.url,
+      type: "readable",
+      stream,
       streamType: "unknown",
     };
   }
@@ -72,7 +86,7 @@ export class CustomStream extends AudioSource<string> {
     return "";
   }
 
-  exportData(): exportableCustom{
+  exportData(): AudioSourceBasicJsonFormat{
     return {
       url: this.url,
       length: this.lengthSeconds,
@@ -81,13 +95,8 @@ export class CustomStream extends AudioSource<string> {
   }
 
   private extractFilename(){
-    const paths = this.url.split("/");
-    return paths[paths.length - 1];
+    const url = new URL(this.url);
+    return url.pathname.split("/").at(-1);
   }
 }
 
-export type exportableCustom = {
-  url: string,
-  length: number,
-  title: string,
-};
