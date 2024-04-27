@@ -76,7 +76,7 @@ const config = useConfig();
 export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
   protected readonly retryLimit = 3;
   protected _seek = 0;
-  protected _errorReportChannel: TextChannel = null;
+  protected _errorReportChannel: TextChannel | null = null;
   protected _volume = 15;
   protected _errorCount = 0;
   protected _errorUrl = "";
