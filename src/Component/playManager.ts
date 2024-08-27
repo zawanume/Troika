@@ -80,7 +80,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
   protected readonly retryLimit = 3;
   protected _seek = 0;
   protected _errorReportChannel: TextChannel | null = null;
-  protected _volume = 100;
+  protected _volume = 15;
   protected _errorCount = 0;
   protected _errorUrl = "";
   protected _preparing = false;
@@ -368,7 +368,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
       this.logger.info("Playback started successfully");
 
       // 現在再生中パネルを送信していい環境な場合に以下のブロックを実行する
-      if(message){
+      /*if(message){
         // 再生開始メッセージ
         const messageContent = this.createNowPlayingMessage();
 
@@ -392,7 +392,7 @@ export class PlayManager extends ServerManagerBase<PlayManagerEvents> {
             }).catch(this.logger.error);
           });
         }
-      }
+      }*/
 
       // ラジオが有効になっている場合、次の曲を準備する
       if(
