@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -20,7 +20,6 @@ import type { TransformOptions } from "stream";
 import type { Readable } from "stream";
 
 import { spawn } from "child_process";
-import * as crypto from "crypto";
 import { Agent as HttpAgent } from "http";
 import { Agent as HttpsAgent } from "https";
 import { PassThrough } from "stream";
@@ -34,29 +33,8 @@ import { getLogger } from "../logger";
 
 export * as color from "./color";
 export * as discordUtil from "./discord";
-export * as effectUtil from "./effect";
 export * as system from "./system";
 export * as time from "./time";
-
-/**
- * 指定された文字列を指定された桁数になるまでゼロ補完します。
- * @param str 補完する文字列
- * @param length 補完後の長さ
- * @returns 保管された文字列
- */
-export function padZero(str: string, length: number){
-  if(str.length >= length) return str;
-  return `${"0".repeat(length - str.length)}${str}`;
-}
-
-/**
- * 文字列をBase64エンコードします
- * @param txt エンコードする文字列
- * @returns Base64エンコードされた文字列
- */
-export function btoa(txt: string){
-  return Buffer.from(txt).toString("base64");
-}
 
 /**
  * オブジェクトを可能な限り文字列化します
@@ -64,7 +42,9 @@ export function btoa(txt: string){
  * @returns 文字列。JSON、またはその他の文字列、および空の文字列の場合があります
  */
 export function stringifyObject(obj: any): string{
-  if(typeof obj === "string"){
+  if(!obj){
+    return "null";
+  }else if(typeof obj === "string"){
     return obj;
   }else if(obj instanceof Error){
     return `${obj.name}: ${obj.message}\n${obj.stack || "no stacks"}`;
@@ -78,6 +58,20 @@ export function stringifyObject(obj: any): string{
       return Object.prototype.toString.call(obj);
     }
   }
+}
+
+/**
+ * 与えられた文字列に、ファイルパスが含まれている場合、それを隠します。
+ * @param original 元の文字列
+ * @returns フィルター後の文字列
+ */
+export function filterContent(original: string){
+  const cwd = process.cwd();
+  return original
+    .replaceAll(cwd, "***")
+    .replace(/https?:\/\/[\w!?/+\-_~;.,*&@#$%()'[\]]+/g, "http:***")
+    .replace(/\\/g, "/")
+    .replace(/\*/g, "\\*");
 }
 
 /**
@@ -103,23 +97,6 @@ export function createPassThrough(opts: TransformOptions = {}): PassThrough{
   return stream;
 }
 
-const UUID_TEMPLATE = "10000000-1000-4000-8000-100000000000";
-/**
- * UUIDを生成します
- * @returns 生成されたUUID
- */
-export function generateUUID(){
-  if(typeof crypto.randomUUID === "function"){
-    return crypto.randomUUID();
-  }else{
-    // ref: https://www.30secondsofcode.org/js/s/uuid-generator-node
-    return UUID_TEMPLATE.replace(/[018]/g, c => {
-      const cn = Number(c);
-      return (cn ^ crypto.randomBytes(1)[0] & 15 >> cn / 4).toString(16);
-    });
-  }
-}
-
 /**
  * パーセンテージを計算します
  * @param part 計算対象の量
@@ -134,19 +111,65 @@ const audioExtensions = [
   ".mp3",
   ".wav",
   ".wma",
-  ".mov",
-  ".mp4",
   ".ogg",
   ".m4a",
   ".webm",
+  ".flac",
 ] as const;
+const videoExtensions = [
+  ".mov",
+  ".mp4",
+  ".webm",
+];
+type ResourceType = "none" | "audio" | "video";
 /**
- * ローオーディオファイルのURLであるかどうかをURLの末尾の拡張子から判断します
- * @param str 検査対象のURL
+ * ローオーディオファイルのURLであるかどうかをURLの末尾の拡張子から判断します。
+ * @param url 検査対象のURL
  * @returns ローオーディオファイルのURLであるならばtrue、それ以外の場合にはfalse
  */
-export function isAvailableRawAudioURL(str: string){
-  return str && audioExtensions.some(ext => str.endsWith(ext));
+export function getResourceTypeFromUrl(url: string | null): ResourceType;
+/**
+ * ローオーディオファイルのURLであるかどうかをURLの末尾の拡張子から判断します。
+ * @param url 検査対象のURL
+ * @param param1 追加の設定。checkResponseがtrueの場合は、リクエストを送信してレスポンスのContent-Typeを確認します。
+ * @returns ローオーディオファイルのURLであるならばtrue、それ以外の場合にはfalse
+ */
+export function getResourceTypeFromUrl(url: string | null, { checkResponse }: { checkResponse: false }): ResourceType;
+/**
+ * ローオーディオファイルのURLであるかどうかをURLの末尾の拡張子から判断します。
+ * @param url 検査対象のURL
+ * @param param1 追加の設定。checkResponseがtrueの場合は、リクエストを送信してレスポンスのContent-Typeを確認します。
+ * @returns ローオーディオファイルのURLであるならばtrue、それ以外の場合にはfalse
+ */
+export function getResourceTypeFromUrl(url: string | null, { checkResponse }: { checkResponse: true }): Promise<ResourceType>;
+export function getResourceTypeFromUrl(url: string | null, { checkResponse = false } = {}): ResourceType | Promise<ResourceType> {
+  // check if the url variable is valid string object.
+  if(!url || typeof url !== "string"){
+    return "none";
+  }
+
+  const urlObject = new URL(url);
+
+  // check if the url has a valid protocol and if its pathname ends with a valid extension.
+  const urlIsHttp = urlObject.protocol === "http:" || urlObject.protocol === "https:";
+
+  if(!urlIsHttp){
+    return "none";
+  }
+
+  const typeInferredFromUrl: ResourceType = videoExtensions.some(ext => urlObject.pathname.endsWith(ext))
+    ? "video"
+    : audioExtensions.some(ext => urlObject.pathname.endsWith(ext))
+      ? "audio"
+      : "none";
+
+  if(!checkResponse || typeInferredFromUrl === "none"){
+    return typeInferredFromUrl;
+  }
+
+  return requestHead(url).then(({ headers }) =>
+    headers["content-type"]?.startsWith(`${typeInferredFromUrl}/`) ? typeInferredFromUrl : "none"
+  );
 }
 
 /**
@@ -155,13 +178,24 @@ export function isAvailableRawAudioURL(str: string){
  * @param headers 追加のカスタムリクエストヘッダ
  * @returns ステータスコード
  */
-export function retriveHttpStatusCode(url: string, headers?: { [key: string]: string }){
+export function retrieveHttpStatusCode(url: string, headers?: { [key: string]: string }){
+  return requestHead(url, headers).then(d => d.statusCode);
+}
+
+/**
+ * 指定されたURLにHEADリクエストを行います。
+ * @param url URL
+ * @param headers 追加のカスタムリクエストヘッダ
+ * @returns レスポンス
+ */
+export function requestHead(url: string, headers: { [key: string]: string } = {}){
   return candyget("HEAD", url, "string", {
     headers: {
       "User-Agent": DefaultUserAgent,
       ...headers,
     },
-  }).then(r => r.statusCode);
+    maxRedirects: 0,
+  });
 }
 
 const httpAgent = new HttpAgent({ keepAlive: false });
@@ -172,7 +206,7 @@ const httpsAgent = new HttpsAgent({ keepAlive: false });
  * @param url URL
  * @returns Readableストリーム
  */
-export function downloadAsReadable(url: string, options: miniget.Options = {}): Readable{
+export function downloadAsReadable(url: string, options: miniget.Options = { headers: { "User-Agent": DefaultUserAgent } }): Readable{
   const logger = getLogger("Util");
   return miniget(url, {
     maxReconnects: 10,
@@ -185,21 +219,78 @@ export function downloadAsReadable(url: string, options: miniget.Options = {}): 
   ;
 }
 
+type RemoteAudioInfo = {
+  lengthSeconds: number | null,
+  title: string | null,
+  artist: string | null,
+  displayTitle: string | null,
+};
+const durationMatcher = /^\s+Duration: (?<length>(\d+:)*\d+(\.\d+)?),/m;
+const titleMatcher = /^\s+title\s+:(?<title>.+)$/m;
+const artistMatcher = /^\s+artist\s+:(?<artist>.+)$/m;
 /**
- * URLからリソースの長さを秒数で取得します
+ * URLからリモートのオーディオリソースの情報を取得します
  * @param url リソースのURL
- * @returns 取得された秒数
+ * @returns 取得されたリソースの情報
  */
-export function retriveLengthSeconds(url: string){
-  return retrieveLengthSecondsInternal(url, () => require("ffmpeg-static")).catch(() => {
-    return retrieveLengthSecondsInternal(url, () => "ffmpeg");
-  });
+export async function retrieveRemoteAudioInfo(url: string): Promise<RemoteAudioInfo> {
+  // FFmpegに食わせて標準出力を取得する
+  const ffmpegOut = await retrieveFFmpegStderrFromUrl(url, () => require("ffmpeg-static"))
+    .catch(er => {
+      getLogger("Util").info(`Failed: ${stringifyObject(er)}`);
+      return retrieveFFmpegStderrFromUrl(url, () => "ffmpeg");
+    });
+
+  const result: RemoteAudioInfo = {
+    lengthSeconds: null,
+    title: null,
+    artist: null,
+    displayTitle: null,
+  };
+
+  if(!ffmpegOut){
+    return result;
+  }else if(ffmpegOut.includes("HTTP error")){
+    throw new Error("Failed to fetch data due to HTTP error.");
+  }
+
+  if(durationMatcher.test(ffmpegOut)){
+    const match = durationMatcher.exec(ffmpegOut)!;
+    result.lengthSeconds = Math.ceil(
+      match.groups!.length
+        .split(":")
+        .map(n => Number(n))
+        .reduce((prev, current) => prev * 60 + current)
+    ) || null;
+  }
+
+  if(titleMatcher.test(ffmpegOut)){
+    const match = titleMatcher.exec(ffmpegOut)!;
+
+    result.title = match.groups!.title?.trim() || null;
+  }
+
+  if(artistMatcher.test(ffmpegOut)){
+    const match = artistMatcher.exec(ffmpegOut)!;
+
+    result.artist = match.groups!.artist?.trim() || null;
+  }
+
+  // construct displayTitle
+  if(result.title){
+    result.displayTitle = result.artist
+      ? `${result.artist} - ${result.title}`
+      : result.title;
+  }
+
+  return result;
 }
 
-function retrieveLengthSecondsInternal(url: string, ffmpeg: () => string){
-  return new Promise<number>((resolve, reject) => {
+function retrieveFFmpegStderrFromUrl(url: string, ffmpegPathGenerator: () => string){
+  return new Promise<string>((resolve, reject) => {
+    const ffmpegPath = ffmpegPathGenerator();
     let data = "";
-    const proc = spawn(ffmpeg(), [
+    const proc = spawn(ffmpegPath, [
       "-i", url,
       "-user_agent", DefaultUserAgent,
     ], {
@@ -207,22 +298,13 @@ function retrieveLengthSecondsInternal(url: string, ffmpeg: () => string){
       stdio: ["ignore", "ignore", "pipe"],
     })
       .on("exit", () => {
-        if(data.length === 0) reject("zero");
-        const match = data.match(/Duration: (?<length>(\d+:)*\d+(\.\d+)?),/i);
-        if(match){
-          const lengthSec = match.groups.length
-            .split(":")
-            .map(n => Number(n))
-            .reduce((prev, current) => prev * 60 + current)
-            ;
-          resolve(Math.ceil(lengthSec));
-        }else{
-          reject("not match");
+        if(data.length === 0){
+          reject(new Error("FFmpeg emit nothing."));
         }
+
+        resolve(data);
       });
-    proc.stderr.on("data", (chunk) => {
-      data += chunk;
-    });
+    proc.stderr.on("data", chunk => data += chunk);
   });
 }
 
@@ -263,6 +345,7 @@ const normalizeTemplate = [
   { from: /ｙ/g, to: "y" } as const,
   { from: /ｚ/g, to: "z" } as const,
   { from: /＞/g, to: ">" } as const,
+  { from: /＜/g, to: "<" } as const,
 ] as const;
 
 /**
@@ -285,7 +368,7 @@ export function normalizeText(rawText: string){
  */
 export function waitForEnteringState(predicate: () => boolean, timeout: number = 10 * 1000, options?: {
   /**
-   * タイムアウトした際にエラーとするかどうかを表します。
+   * タイムアウトした際にエラーとするかどうかを表します。デフォルトではエラーとなります。
    */
   rejectOnTimeout?: boolean,
   /**
@@ -328,7 +411,7 @@ export function createDebounceFunctionsFactroy<Key>(func: (key: Key) => void, de
   const functionsStore = new Map<Key, () => void>();
   return (key: Key) => {
     if(functionsStore.has(key)){
-      return functionsStore.get(key);
+      return functionsStore.get(key)!;
     }else{
       const fn = debounce(debounceDelay, () => func(key));
       functionsStore.set(key, fn);
@@ -341,47 +424,122 @@ export function createFragmentalDownloadStream(
   streamGenerator: string | ((start: number, end?: number) => Readable),
   { chunkSize = 512 * 1024, contentLength, userAgent = SecondaryUserAgent }: { chunkSize?: number, contentLength: number, userAgent?: string },
 ){
-  const logger = getLogger("FragmentalDownloader");
+  const logger = getLogger("FragmentalDownloader", true);
   logger.addContext("id", Date.now());
+
   const stream = createPassThrough();
-  let current = -1;
-  if(contentLength < chunkSize){
-    const originStream = typeof streamGenerator === "string"
-      ? downloadAsReadable(streamGenerator, {
-        headers: {
-          "User-Agent": userAgent,
-        },
-      })
-      : streamGenerator(0);
-    originStream
-      .on("error", er => stream.destroy(er))
-      .pipe(stream);
-    logger.info("Stream was created as a single stream");
-  }else{
-    const pipeNextStream = () => {
-      current++;
-      let end = chunkSize * (current + 1) - 1;
-      if(end >= contentLength) end = undefined;
-      const nextStream = typeof streamGenerator === "string"
+
+  setImmediate(() => {
+    let current = -1;
+
+    if(contentLength < chunkSize){
+      const originStream = typeof streamGenerator === "string"
         ? downloadAsReadable(streamGenerator, {
           headers: {
             "User-Agent": userAgent,
-            "Range": `bytes=${chunkSize * current}-${end ? end : ""}`,
           },
         })
-        : streamGenerator(chunkSize * current, end);
-      logger.info(`Stream #${current + 1} was created`);
-      nextStream
+        : streamGenerator(0);
+
+      originStream
         .on("error", er => stream.destroy(er))
-        .pipe(stream, { end: end === undefined });
-      if(end !== undefined){
-        nextStream.on("end", () => pipeNextStream());
-      }else{
-        logger.info(`Last stream (total: ${current + 1})`);
-      }
-    };
-    pipeNextStream();
-    logger.info(`Stream was created as partial stream. ${Math.ceil(contentLength / chunkSize)} streams will be created.`);
-  }
+        .pipe(stream);
+
+      logger.info("Stream was created as a single stream");
+    }else{
+      const pipeNextStream = () => {
+        current++;
+
+        let end: number | undefined = chunkSize * (current + 1) - 1;
+
+        if(end >= contentLength){
+          end = undefined;
+        }
+
+        const nextStream = typeof streamGenerator === "string"
+          ? downloadAsReadable(streamGenerator, {
+            headers: {
+              "User-Agent": userAgent,
+              "Range": `bytes=${chunkSize * current}-${end ? end : ""}`,
+            },
+          })
+          : streamGenerator(chunkSize * current, end);
+        logger.info(`Stream #${current + 1} was created`);
+
+        nextStream
+          .on("error", er => stream.destroy(er))
+          .pipe(stream, { end: end === undefined });
+
+        if(end !== undefined){
+          nextStream.on("end", () => pipeNextStream());
+        }else{
+          logger.info(`Last stream (total: ${current + 1})`);
+        }
+      };
+
+      pipeNextStream();
+
+      logger.info(`Stream was created as partial stream. ${Math.ceil(contentLength / chunkSize)} streams will be created.`);
+    }
+  });
   return stream;
 }
+
+export function requireIfAny(id: string): unknown {
+  try{
+    return require(id);
+  }
+  catch(e){
+    const logger = getLogger("Util");
+
+    logger.info(`The module "${id}" couldn't be loaded because of the error: ${stringifyObject(e)}`);
+
+    return null;
+  }
+}
+
+interface UnsafeTraverseState<T> {
+  value: T;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  getProperty: <U = any>(name: keyof T | (string & {})) => UnsafeTraverseState<U | undefined>;
+  select: <U = any>(selector: (current: T) => U | undefined | null) => UnsafeTraverseState<U | undefined>;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  execute: <U extends keyof T | (string & {})>(func: U) => T extends undefined
+    ? () => UnsafeTraverseState<undefined>
+    : T extends { [key in U]: (...args: any[]) => any }
+      ? (...args: Parameters<T[U]>) => UnsafeTraverseState<ReturnType<T[U]>>
+      : (..._: any[]) => UnsafeTraverseState<undefined>;
+  action: (action: (value: T) => void) => UnsafeTraverseState<T>;
+}
+
+export function unsafeTraverseFrom<S>(obj: S){
+  const createState: <T = any> (value: T) => UnsafeTraverseState<T> = <T = any> (value: T) => ({
+    value,
+    getProperty: <U = any>(name: string) => value
+      ? createState<U | undefined>(value[name as keyof typeof value] as U | null | undefined || undefined)
+      : undefinedState,
+    select: <U = any>(selector: (current: T) => U | undefined | null) => value
+      ? createState<U | undefined>(selector(value) || undefined)
+      : undefinedState,
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    execute: <U extends keyof T | (string & {})>(func: U) => (!value
+      ? () => undefinedState
+      // @ts-expect-error
+      : typeof value[func] === "function"
+        // @ts-expect-error
+        ? (...args: Parameters<T[U]>) => createState<ReturnType<T[U]>>(value[func](...args))
+        : (..._: any[]) => undefinedState) as any,
+    action: (action: (value: T) => void) => {
+      action(value);
+      return createState(value);
+    },
+  });
+
+  const undefinedState = createState(undefined);
+
+  return createState<S>(obj);
+}
+
+export function assertIs<T>(obj: unknown): asserts obj is T{}
+
+export function assertIsNotNull<T>(obj: T | null): asserts obj is T {}

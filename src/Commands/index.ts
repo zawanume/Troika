@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -17,23 +17,32 @@
  */
 
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { ListCommandInitializeOptions, UnlistCommandOptions, ListCommandWithArgsOptions, CommandArgs, CommandPermission, LocalizedSlashCommandArgument } from "../Structure/Command";
+import type { GuildDataContainer } from "../Structure";
 import type { LoggerObject } from "../logger";
-import type { ApplicationCommandOptionsBoolean, ApplicationCommandOptionsChoice, ApplicationCommandOptionsInteger, ApplicationCommandOptionsString, CreateApplicationCommandOptions, LocaleMap } from "oceanic.js";
+import type { ListCommandInitializeOptions, UnlistCommandOptions, ListCommandWithArgsOptions, CommandArgs, CommandPermission, LocalizedSlashCommandArgument } from "../types/Command";
+import type { AnyTextableGuildChannel, ApplicationCommandOptionsBoolean, ApplicationCommandOptionsChoice, ApplicationCommandOptionsInteger, ApplicationCommandOptionsString, CreateApplicationCommandOptions, LocaleMap, ModalSubmitInteraction, PermissionName } from "oceanic.js";
+
+import { AsyncLocalStorage } from "async_hooks";
 
 import i18next from "i18next";
-import { TypedEmitter } from "oceanic.js";
-import { ApplicationCommandTypes } from "oceanic.js";
+import { InteractionTypes, Permissions, TypedEmitter, ApplicationCommandTypes } from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { discordUtil } from "../Util";
 import { availableLanguages } from "../i18n";
 import { getLogger } from "../logger";
 
-export { CommandArgs } from "../Structure/Command";
+export { CommandArgs } from "../types/Command";
 
 interface CommandEvents {
   run: [Readonly<CommandArgs>];
+}
+
+export const commandExecutionContext = new AsyncLocalStorage<CommandArgs>();
+export function getCommandExecutionContext(): CommandArgs | Pick<CommandArgs, "t"> {
+  return commandExecutionContext.getStore() ?? {
+    t: i18next.t,
+  };
 }
 
 /**
@@ -41,11 +50,15 @@ interface CommandEvents {
  */
 export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
   /** ボットを実行します */
-  protected abstract run(message: CommandMessage, context: Readonly<CommandArgs>, t: (typeof i18next)["t"]): Promise<void>;
+  protected abstract run(message: CommandMessage, context: Readonly<CommandArgs>): Promise<void>;
 
   // eslint-disable-next-line unused-imports/no-unused-vars
   handleAutoComplete(argname: string, input: string | number, otherOptions: { name: string, value: string | number }[]): string[] {
     return [];
+  }
+
+  // eslint-disable-next-line unused-imports/no-unused-vars
+  async handleModalSubmitInteraction(interaction: ModalSubmitInteraction<AnyTextableGuildChannel>, server: GuildDataContainer){
   }
 
   protected readonly _name: string;
@@ -58,7 +71,7 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
     return this._alias;
   }
 
-  protected readonly _description: string = null;
+  protected readonly _description: string;
   public get description(){
     return this._description;
   }
@@ -68,17 +81,17 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
     return this._unlist;
   }
 
-  protected readonly _examples: LocaleMap = null;
+  protected readonly _examples: LocaleMap | null;
   public get examples(){
     return this._examples;
   }
 
-  protected readonly _usage: LocaleMap = null;
+  protected readonly _usage: LocaleMap | null;
   public get usage(){
     return this._usage;
   }
 
-  protected readonly _category: string = null;
+  protected readonly _category: string;
   public get category(){
     return this._category;
   }
@@ -88,17 +101,17 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
     return this._shouldDefer;
   }
 
-  protected readonly _argument: Readonly<LocalizedSlashCommandArgument[]> = null;
+  protected readonly _argument: Readonly<LocalizedSlashCommandArgument[]> | null;
   public get argument(){
     return this._argument;
   }
 
-  protected readonly _requiredPermissionsOr: CommandPermission[] = null;
+  protected readonly _requiredPermissionsOr: CommandPermission[];
   public get requiredPermissionsOr(){
     return this._requiredPermissionsOr || [];
   }
 
-  protected readonly _descriptionLocalization: LocaleMap = null;
+  protected readonly _descriptionLocalization: LocaleMap;
   get descriptionLocalization(){
     return this._descriptionLocalization;
   }
@@ -113,21 +126,36 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
     return this._messageCommand;
   }
 
+  protected readonly _interactionOnly: boolean = false;
+  get interactionOnly(){
+    return this._interactionOnly;
+  }
+
+  protected readonly _defaultMemberPermission: PermissionName[] | "NONE" = "NONE";
+  get defaultMemberPermission(){
+    return this._defaultMemberPermission;
+  }
+
   /** スラッシュコマンドの名称として登録できる旧基準を満たしたコマンド名を取得します */
   get asciiName(){
-    return this.alias.filter(c => c.match(/^[\w-]{2,32}$/))[0];
+    return this.alias.filter(c => c.match(/^[>\w-]{2,32}$/))[0];
   }
 
   protected readonly logger: LoggerObject;
 
-  constructor(opts: ListCommandInitializeOptions|UnlistCommandOptions){
+  constructor(opts: ListCommandInitializeOptions | UnlistCommandOptions){
     super();
+    this._messageCommand = "messageCommand" in opts && opts.messageCommand || false;
+    this._interactionOnly = "interactionOnly" in opts && opts.interactionOnly || false;
     this._alias = opts.alias;
-    this._name = "name" in opts ? opts.name : i18next.t(`commands:${this.asciiName}.name` as any);
+    this._name = "name" in opts
+      ? opts.name
+      : this._interactionOnly
+        ? opts.alias[0]
+        : i18next.t(`commands:${this.asciiName}.name` as any);
     this._unlist = opts.unlist;
     this._shouldDefer = opts.shouldDefer;
     this._disabled = opts.disabled || false;
-    this._messageCommand = "messageCommand" in opts && opts.messageCommand;
     if(!this._unlist){
       if(!this.asciiName){
         throw new Error("Command has not ascii name");
@@ -137,8 +165,9 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
         examples,
         usage,
         category,
-        argument,
+        args,
         requiredPermissionsOr,
+        defaultMemberPermission,
       } = opts as ListCommandWithArgsOptions;
 
       this._description = i18next.t(`commands:${this.asciiName}.description` as any);
@@ -153,7 +182,7 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
       this._examples = examples ? {} : null;
       if(this._examples){
         availableLanguages().forEach(language => {
-          this._examples[language as keyof typeof this._examples]
+          this._examples![language as keyof typeof this._examples]
             = i18next.t(`commands:${this.asciiName}.examples` as any, { lng: language }).trim();
         });
       }
@@ -161,21 +190,21 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
       this._usage = usage ? {} : null;
       if(this._usage){
         availableLanguages().forEach(language => {
-          this._usage[language as keyof typeof this._usage]
+          this._usage![language as keyof typeof this._usage]
             = i18next.t(`commands:${this.asciiName}.usage` as any, { lng: language }).trim();
         });
       }
 
       this._category = category;
 
-      this._argument = argument ? argument.map(arg => {
+      this._argument = args ? args.map(arg => {
         const result: LocalizedSlashCommandArgument = {
           type: arg.type,
           name: arg.name,
           required: arg.required || false,
-          description: i18next.t(`commands:${this.asciiName}.args.${arg.name}.description` as any) as string,
+          description: i18next.t(`commands:${this.asciiName}.args.${arg.name}.description` as any),
           descriptionLocalization: {} as LocaleMap,
-          choices: [] as LocalizedSlashCommandArgument["choices"],
+          choices: [],
           autoCompleteEnabled: arg.autoCompleteEnabled || false,
         };
         availableLanguages().forEach(language => {
@@ -198,10 +227,10 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
             if(localized === resultChoice.name) return;
             resultChoice.nameLocalizations[language as keyof LocaleMap] = localized.trim();
           });
-          result.choices.push(resultChoice);
+          result.choices!.push(resultChoice);
         });
 
-        if(result.choices.length === 0){
+        if(result.choices!.length === 0){
           delete result.choices;
         }
 
@@ -209,6 +238,7 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
       }) : null;
 
       this._requiredPermissionsOr = requiredPermissionsOr || [];
+      this._defaultMemberPermission = defaultMemberPermission || "NONE";
     }
     this.logger = getLogger(`Command(${this.asciiName})`);
     this.logger.debug(`${this.name} loaded`);
@@ -265,22 +295,42 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
     };
     if(this.requiredPermissionsOr.length !== 0 && !this.requiredPermissionsOr.some(judgeIfPermissionMeeted)){
       await message.reply({
-        content: i18next.t("permissions.needed", {
+        content: `${context.includeMention ? `<@${message.member.id}> ` : ""}${i18next.t("permissions.needed", {
           permissions: this.getLocalizedPermissionDescription(context.locale),
           lng: context.locale,
-        }),
+        })}`,
         ephemeral: true,
+        allowedMentions: {
+          users: false,
+        },
       });
       return;
     }
+
+    // 遅延処理するべき時には遅延させる
+    if(this.shouldDefer && message["_interaction"] && !message["_interaction"].acknowledged){
+      if(message["_interaction"].type === InteractionTypes.APPLICATION_COMMAND){
+        await message["_interaction"].defer();
+      }else if(message["_interaction"].type === InteractionTypes.MESSAGE_COMPONENT){
+        await message["_interaction"].deferUpdate();
+      }
+    }
+
     this.emit("run", context);
-    await this.run(message, context, i18next.getFixedT(context.locale));
+
+    await commandExecutionContext.run(context, () => this.run(message, context));
   }
 
   /** アプリケーションコマンドとして登録できるオブジェクトを生成します */
   toApplicationCommandStructure(): CreateApplicationCommandOptions[] {
-    if(this.unlist) throw new Error("This command cannot be listed due to private command!");
+    if(this.unlist){
+      throw new Error("This command cannot be listed due to private command!");
+    }
+
     const result: CreateApplicationCommandOptions[] = [];
+    const defaultMemberPermissions = this.defaultMemberPermission === "NONE"
+      ? null
+      : this.defaultMemberPermission.reduce((prev, current) => prev | Permissions[current], 0n).toString();
 
     // build options if any
     const options = this.argument?.map(arg => {
@@ -299,15 +349,15 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
           nameLocalizations: Object.entries(choice.nameLocalizations).length > 0 ? choice.nameLocalizations : null,
         })) as ApplicationCommandOptionsChoice[],
         autocomplete: arg.autoCompleteEnabled || false,
-      };
+      } as ApplicationCommandOptionsString | ApplicationCommandOptionsInteger | ApplicationCommandOptionsBoolean;
 
-      if(discordCommandStruct.choices){
+      if("choices" in discordCommandStruct){
         delete discordCommandStruct.autocomplete;
-      }else{
+      }else if("autocomplete" in discordCommandStruct){
         delete discordCommandStruct.choices;
       }
 
-      return discordCommandStruct as ApplicationCommandOptionsString | ApplicationCommandOptionsInteger | ApplicationCommandOptionsBoolean;
+      return discordCommandStruct;
     });
 
     if(options && options.length > 0){
@@ -320,6 +370,7 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
           .substring(0, 100),
         descriptionLocalizations: Object.entries(this.descriptionLocalization).length > 0 ? this.descriptionLocalization : null,
         options,
+        defaultMemberPermissions,
       });
     }else{
       result.push({
@@ -330,6 +381,7 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
           .replace(/\n/g, "")
           .substring(0, 100),
         descriptionLocalizations: Object.entries(this.descriptionLocalization).length > 0 ? this.descriptionLocalization : null,
+        defaultMemberPermissions,
       });
     }
 
@@ -338,13 +390,25 @@ export abstract class BaseCommand extends TypedEmitter<CommandEvents> {
         type: ApplicationCommandTypes.MESSAGE as const,
         name: this.asciiName,
         nameLocalizations: {} as LocaleMap,
+        defaultMemberPermissions,
       };
       availableLanguages().forEach(language => {
-        messageCommand.nameLocalizations[language as keyof LocaleMap] = i18next.t(`commands:${this.asciiName}.messageCommandName` as any, { lng: language });
+        messageCommand.nameLocalizations[language as keyof LocaleMap] = i18next.t(`commands:${this.asciiName}.messageCommandName` as any, { lng: language })!;
       });
       result.push(messageCommand);
     }
 
     return result;
   }
+
+  static updateBoundChannel = function updateBoundChannel<This extends BaseCommand, Return>(
+    originalMethod: (this: This, ...args: Parameters<BaseCommand["run"]>) => Return,
+    _context: ClassMethodDecoratorContext<This, (this: This, ...args: Parameters<BaseCommand["run"]>) => Return>,
+  ){
+    return function replacementMethodUpdateBoundChannel(this: This, ...args: Parameters<BaseCommand["run"]>): Return {
+      args[1].server.updateBoundChannel(args[0]);
+
+      return originalMethod.apply(this, args);
+    };
+  };
 }

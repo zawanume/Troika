@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -25,8 +25,8 @@ import { LogEmitter } from ".";
  * すべてのマネージャークラスの基底クラスです
  */
 export abstract class ServerManagerBase<T extends EventDictionary> extends LogEmitter<T> {
-  protected server: GuildDataContainer = null;
-  
+  protected server: GuildDataContainer;
+
   constructor(tag: string, parent: GuildDataContainer){
     super(tag, parent.getGuildId());
     this.logger.info("Set data of guild id " + parent.getGuildId());

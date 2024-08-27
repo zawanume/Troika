@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,30 +16,31 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import "./dotenv";
+import "dotenv/config";
 import "./logger";
+import "./polyfill";
 import type * as http from "http";
 
 import log4js from "log4js";
 
 import { stringifyObject } from "./Util";
 import { MusicBot } from "./bot";
-import { useConfig } from "./config";
+import { getConfig } from "./config";
 import { initLocalization } from "./i18n";
 import { createServer } from "./server";
 
 const logger = log4js.getLogger("Entry");
-const config = useConfig();
+const config = getConfig();
 
 logger.info("Discord-SimpleMusicBot by mtripg6666tdr");
-logger.info("This application was originally built by mtripg6666tdr and is licensed under GPLv3 or later.");
+logger.info("This application was originally written by mtripg6666tdr and is licensed under GPLv3 or later.");
 logger.info("There is no warranty for the work, both of the original and its forks.");
-logger.info("However if you found any bugs in the original please feel free to report them by creating an issue on GitHub.");
+logger.info("However if you find a bug in the original application, please feel free to report it by creating an issue on GitHub.");
 logger.info("Thank you for using Discord-SimpleMusicBot!");
 logger.info(`Node.js v${process.versions.node}`);
 
 const bot = new MusicBot(process.env.TOKEN, Boolean(config.maintenance));
-let server: http.Server = null;
+let server: http.Server | null = null;
 
 // Webサーバーのインスタンス化
 if(config.webserver){
@@ -48,47 +49,64 @@ if(config.webserver){
   logger.info("Skipping to start server");
 }
 
-if(!config.debug){
+if(config.debug){
+  process.on("uncaughtException", async (error)=>{
+    if(bot.client){
+      await reportError(error);
+    }
+    logger.fatal(error);
+
+    const err = await new Promise<Error | undefined>(resolve => log4js.shutdown(resolve));
+
+    console.error("An error occurred while shutting down the logger:", err);
+
+    process.exit(1);
+  });
+}else{
   // ハンドルされなかったエラーのハンドル
   process.on("uncaughtException", async (error)=>{
     logger.fatal(error);
-    if(bot.client && config.errorChannel){
+    if(bot.client){
       await reportError(error);
     }
-  });
-}else{
-  process.on("uncaughtException", async (error)=>{
-    if(bot.client && config.errorChannel){
-      await reportError(error);
-    }
-    logger.fatal(error);
-    process.exit(1);
   });
 }
 
 let terminating = false;
 const onTerminated = async function(code: string){
   if(terminating) return;
+
   terminating = true;
+
   logger.info(`${code} detected`);
-  logger.info("Shutting down the bot...");
+
   await bot.stop();
+
   if(server && server.listening){
     logger.info("Shutting down the server...");
     await new Promise(resolve => server.close(resolve));
   }
+
   // 強制終了を報告
   if(bot.client && config.errorChannel){
     bot.client.rest.channels.createMessage(config.errorChannel, {
       content: "Process terminated",
     }).catch(() => {});
   }
+
   if(global.workerThread){
     logger.info("Shutting down worker...");
     await global.workerThread.terminate();
   }
+
   logger.info("Shutting down completed");
-  log4js.shutdown((er) => console.error(er));
+
+  log4js.shutdown(er => {
+    if(er){
+      console.error(er);
+    }
+  });
+
   setTimeout(() => {
     console.error("Killing... (forced)");
     process.exit(1);
@@ -107,6 +125,8 @@ initLocalization(config.debug, config.defaultLanguage).then(() => {
 });
 
 async function reportError(err: any){
+  if(!config.errorChannel) return;
+
   try{
     await bot.client.rest.channels.createMessage(config.errorChannel, {
       content: stringifyObject(err),

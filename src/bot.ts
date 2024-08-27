@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,25 +18,42 @@
 
 import type { CommandArgs } from "./Structure";
 
+import i18next from "i18next";
 import * as discord from "oceanic.js";
 
+import { Telemetry } from "./Component/telemetry";
+import { requireIfAny } from "./Util";
 import { MusicBotBase } from "./botBase";
-import { useConfig } from "./config";
+import { getConfig } from "./config";
 import * as eventHandlers from "./events";
 
-const config = useConfig();
+const config = getConfig();
 
 /**
  * 音楽ボットの本体
  */
 export class MusicBot extends MusicBotBase {
   // クライアントの初期化
-  protected readonly _client = null as discord.Client;
+  protected readonly _client: discord.Client;
   // eslint-disable-next-line @typescript-eslint/prefer-readonly
   private _isReadyFinished = false;
 
   get readyFinished(){
     return this._isReadyFinished;
+  }
+
+  private readonly _telemetry: Telemetry | null = null;
+
+  get telemetry(){
+    return this._telemetry;
+  }
+
+  // ready.ts で値を代入しているため
+  // eslint-disable-next-line @typescript-eslint/prefer-readonly
+  private _mentionText: `<@${string}>` = "" as `<@${string}>`;
+
+  get mentionText(){
+    return this._mentionText;
   }
 
   constructor(token: string, maintenance: boolean = false){
@@ -55,16 +72,11 @@ export class MusicBot extends MusicBotBase {
           "GUILD_VOICE_STATES",
           "MESSAGE_CONTENT",
         ],
-        compress: (() => {
-          try{
-            return !!require("zlib-sync");
-          }
-          catch{
-            return false;
-          }
-        })(),
+        compress: !!(requireIfAny("zlib-sync") || requireIfAny("pako")),
       },
     });
+
+    this._telemetry = process.env.DISABLE_TELEMETRY ? null : new Telemetry(this);
 
     this.client.once("ready", eventHandlers.onReady.bind(this));
     this.once("ready", () => {
@@ -89,14 +101,15 @@ export class MusicBot extends MusicBotBase {
 
   private async onError(er: Error){
     this.logger.error(er);
-    if(er.message?.startsWith("Invalid token")){
-      this.logger.fatal(
-        "Invalid token detected. Please ensure that you set the correct token. You can also re-generate new token for your bot."
-      );
-      process.exit(1);
+    if(er.message?.startsWith("Invalid token") || (er.cause as Error | undefined)?.message?.includes("401: Unauthorized")){
+      throw new Error("Invalid token detected. Please ensure that you set the correct token. You can also re-generate a new token for your bot.");
     }else{
-      this.logger.info("Attempt reconnecting after waiting for a while...");
-      this._client.disconnect(true);
+      if(this.client.shards.some(shard => shard.status === "disconnected")){
+        this.logger.info("Attempt reconnecting after waiting for a while...");
+        this._client.disconnect(true);
+      }
+
+      this.telemetry?.registerError(er);
     }
   }
 
@@ -112,7 +125,7 @@ export class MusicBot extends MusicBotBase {
    * Botを開始します。
    */
   run(){
-    this._client.connect().catch(e => this.logger.error(e));
+    this._client.connect().catch(this.onError.bind(this));
   }
 
   async stop(){
@@ -133,15 +146,20 @@ export class MusicBot extends MusicBotBase {
    * @returns コマンドを実行する際にランナーに渡す引数
    */
   createCommandRunnerArgs(guildId: string, options: string[], optiont: string, locale: string): CommandArgs{
+    if(!this.guildData.has(guildId)){
+      throw new Error("The specified guild was not found.");
+    }
+
     return {
       args: options,
       bot: this,
-      server: this.guildData.get(guildId),
+      server: this.guildData.get(guildId)!,
       rawArgs: optiont,
       client: this._client,
-      initData: this.initData.bind(this),
+      initData: this.upsertData.bind(this),
       includeMention: false,
       locale,
+      t: i18next.getFixedT(locale),
     };
   }
 }

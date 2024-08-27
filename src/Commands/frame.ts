@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { FFmpeg } from "prism-media";
 import * as ytdl from "ytdl-core";
@@ -34,7 +33,7 @@ export default class Frame extends BaseCommand {
       alias: ["frame", "キャプチャ", "capture"],
       unlist: false,
       category: "player",
-      argument: [{
+      args: [{
         type: "string",
         name: "time",
         required: false,
@@ -46,8 +45,10 @@ export default class Frame extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     const server = context.server;
 
     // そもそも再生状態ではない場合
@@ -56,7 +57,7 @@ export default class Frame extends BaseCommand {
       return;
     }
 
-    const vinfo = server.player.currentAudioInfo;
+    const vinfo = server.player.currentAudioInfo!;
     if(!vinfo.isYouTube()){
       await message.reply(`:warning:${t("commands:frame.unsupported")}`).catch(this.logger.error);
       return;
@@ -80,13 +81,13 @@ export default class Frame extends BaseCommand {
     }
 
     if(!vinfo.isLiveStream && (isNaN(time) || time > vinfo.lengthSeconds)){
-      await message.reply(`:warning:${t("commands:frame.invalidTime")}`).catch(this.logger.error);
+      await message.reply(`:warning: ${t("commands:frame.invalidTime")}`).catch(this.logger.error);
       return;
     }
 
     try{
-      const [hour, min, sec] = Util.time.calcHourMinSec(Math.floor(time * 100) / 100);
-      const response = await message.reply(`:camera_with_flash:${t("commands:frame.capturing")}...`);
+      const [hour, min, sec] = Util.time.calcHourMinSec(time, { fixedLength: 2 });
+      const response = await message.reply(`:camera_with_flash: ${t("commands:frame.capturing")}...`);
       const { url, ua } = await vinfo.fetchVideo();
       const frame = await getFrame(url, time, ua);
       await response.channel.createMessage({
@@ -99,7 +100,7 @@ export default class Frame extends BaseCommand {
         ],
       });
       await response.edit({
-        content: `:white_check_mark:${
+        content: `:white_check_mark: ${
           t("commands:frame.finish")
         }${vinfo.isLiveStream
           ? ""
@@ -132,7 +133,7 @@ function getFrame(url: string, time: number, ua: string){
     logger.debug(`Passing args: ${args.join(" ")}`);
     const bufs = [] as Buffer[];
     const ffmpeg = new FFmpeg({ args });
-    ffmpeg.process.stderr.on("data", logger.debug);
+    ffmpeg.process.stderr?.on("data", logger.debug);
     ffmpeg
       .on("error", (er) => {
         if(!ffmpeg.destroyed) ffmpeg.destroy(er);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,48 +16,114 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { UrlStreamInfo } from ".";
-import type { exportableCustom } from "./custom";
-import type { i18n } from "i18next";
+import type { AudioSourceBasicJsonFormat, UrlStreamInfo } from ".";
+
+import candyget from "candyget";
+import * as htmlEntities from "html-entities";
 
 import { AudioSource } from "./audiosource";
-import { retriveHttpStatusCode, retriveLengthSeconds } from "../Util";
+import { getCommandExecutionContext } from "../Commands";
+import { requestHead, retrieveHttpStatusCode, retrieveRemoteAudioInfo } from "../Util";
+import { DefaultUserAgent } from "../definition";
 
-export class GoogleDrive extends AudioSource<string> {
+export class GoogleDrive extends AudioSource<string, AudioSourceBasicJsonFormat> {
+  protected resourceUrlCache: UrlStreamInfo | null = null;
+
   constructor(){
-    super("googledrive");
-    this._unableToCache = true;
+    super({ isCacheable: false });
   }
 
-  async init(url: string, prefetched: exportableCustom, t: i18n["t"]){
+  async init(url: string, prefetched: AudioSourceBasicJsonFormat | null){
+    const { t } = getCommandExecutionContext();
+
     if(prefetched){
       this.title = prefetched.title || t("audioSources.driveStream");
       this.url = url;
       this.lengthSeconds = prefetched.length;
     }else{
-      this.title = t("audioSources.driveStream");
+      this.title = await GoogleDrive.retriveFilename(url);
       this.url = url;
-      if(await retriveHttpStatusCode(this.url) !== 200){
+      if(await retrieveHttpStatusCode(this.url) !== 200){
         throw new Error(t("urlNotFound"));
       }
-      try{
-        this.lengthSeconds = await retriveLengthSeconds((await this.fetch()).url);
-      }
-      catch{ /* empty */ }
+      const info = await retrieveRemoteAudioInfo((await this.fetch()).url);
+      this.lengthSeconds = info.lengthSeconds || 0;
     }
     return this;
   }
 
   async fetch(): Promise<UrlStreamInfo>{
+    if(this.resourceUrlCache){
+      return this.resourceUrlCache;
+    }
+
     const id = GoogleDrive.getId(this.url);
-    return {
+    let resourceUrl = `https://drive.usercontent.google.com/uc?id=${id}&export=download`;
+
+    this.logger.debug("Fetching resource URL.");
+    const { statusCode, headers, body } = await candyget(resourceUrl, "stream", {
+      headers: {
+        "User-Agent": DefaultUserAgent,
+      },
+    });
+    const contentType = headers["content-type"];
+    let canBeWithVideo = !!contentType?.startsWith("video/");
+
+    if(statusCode >= 400 || !contentType){
+      body.destroy();
+      throw new Error("The requested resource is not available right now.");
+    }
+
+    const isDoc = contentType.startsWith("text/html");
+
+    if(isDoc){
+      this.logger.debug("Resource URL is a document. Reading resource URL from document.");
+      const document = await new Promise<string>((resolve, reject) => {
+        const buf: Buffer[] = [];
+        body
+          .on("data", chunk => buf.push(chunk))
+          .on("error", reject)
+          .on("end", () => {
+            resolve(Buffer.concat(buf).toString());
+          });
+      });
+      const { url: actionUrl } = document.match(/action="(?<url>.+?)"/)?.groups || {};
+      const resourceUrlObj = new URL(actionUrl);
+      for(const match of document.matchAll(/<input type="hidden" name="(?<name>.+?)" value="(?<value>.+?)">/g)){
+        const { name, value } = match.groups!;
+        resourceUrlObj.searchParams.set(name, value);
+      }
+
+      resourceUrl = resourceUrlObj.toString();
+
+      this.logger.debug("Fetching resource URL to check if it is playable");
+      const { statusCode: resourceStatusCode, headers: resourceHeaders } = await requestHead(resourceUrl);
+      const resourceContentType = resourceHeaders["content-type"];
+
+      if(
+        resourceStatusCode >= 400
+        || !resourceContentType
+        || (!resourceContentType.startsWith("audio/") && !resourceContentType.startsWith("video/"))
+      ){
+        throw new Error("The requested resource is not available right now.");
+      }
+
+      canBeWithVideo = !!resourceContentType.startsWith("video/");
+    }
+
+    body.destroy();
+
+    return this.resourceUrlCache = {
       type: "url",
       streamType: "unknown",
-      url: `https://drive.google.com/uc?id=${id}`,
+      url: resourceUrl,
+      canBeWithVideo,
     };
   }
 
-  toField(_: boolean, t: i18n["t"]){
+  toField(_: boolean){
+    const { t } = getCommandExecutionContext();
+
     return [
       {
         name: `:asterisk:${t("moreInfo")}`,
@@ -70,12 +136,16 @@ export class GoogleDrive extends AudioSource<string> {
     return "";
   }
 
-  exportData(): exportableCustom{
+  exportData(): AudioSourceBasicJsonFormat {
     return {
       url: this.url,
       length: this.lengthSeconds,
       title: this.title,
     };
+  }
+
+  override purgeCache(): void {
+    this.resourceUrlCache = null;
   }
 
   static validateUrl(url: string){
@@ -84,6 +154,21 @@ export class GoogleDrive extends AudioSource<string> {
 
   static getId(url: string){
     const match = url.match(/^https?:\/\/drive\.google\.com\/file\/d\/(?<id>[^/?]+)(\/.+)?$/);
-    return match ? match.groups.id : null;
+    return match?.groups?.id || null;
+  }
+
+  static async retriveFilename(url: string){
+    const source = await candyget.get(url, "string", { maxRedirects: 0 });
+    if(source.statusCode !== 200){
+      throw new Error("The requested file is not available right now.");
+    }
+
+    const name = source.body.match(/<meta property="og:title" content="(?<name>.+?)">/)?.groups?.name;
+
+    if(!name){
+      throw new Error("Something went wrong while fetching the file data.");
+    }
+
+    return htmlEntities.decode(name);
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,12 +18,12 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
+import type { MessageActionRow } from "oceanic.js";
 
-import { MessageActionRowBuilder, MessageButtonBuilder, MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
+import { MessageActionRowBuilder, MessageButtonBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
 import { BaseCommand } from ".";
-import { getColor } from "../Util/color";
+import { audioEffectNames, type AudioEffectNames } from "../Component/audioEffectManager";
 
 export default class Effect extends BaseCommand {
   constructor(){
@@ -36,78 +36,63 @@ export default class Effect extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     try{
       const { collector, customIdMap } = context.server.bot.collectors.create()
         .setAuthorIdFilter(message.member.id)
         .setMaxInteraction(Infinity)
         .setTimeout(5 * 60 * 1000)
-        .createCustomIds({
-          reload: "button",
-          bassBoost: "button",
-          reverb: "button",
-          loudnessEq: "button",
-        });
-      const createEffectEmbed = () => new MessageEmbedBuilder()
-        .setTitle(`:cd:${t("commands:effect.effectControllPanel.title")}:microphone:`)
-        .setDescription(t("commands:effect.effectControllPanel.description"))
-        .addField("Bass Boost", context.server.effectPrefs.BassBoost ? "⭕" : "❌", true)
-        .addField("Reverb", context.server.effectPrefs.Reverb ? "⭕" : "❌", true)
-        .addField("Loudness Eq", context.server.effectPrefs.LoudnessEqualization ? "⭕" : "❌", true)
-        .setColor(getColor("EFFECT"))
-        .setFooter({
-          iconURL: message.member.avatarURL(),
-          text: t("commands:effect.effectControllPanel.footer"),
-        })
-        .toOceanic()
-      ;
-      const createActionRow = () => new MessageActionRowBuilder()
-        .addComponents(
+        .createCustomIds(
+          Object.fromEntries(
+            [
+              ["reload", "button"],
+              ...audioEffectNames.map(name => [name, "button" as const]),
+            ]
+          ) as Record<"reload" | AudioEffectNames, "button">
+        );
+      const createActionRow = () => {
+        const rows: MessageActionRow[] = [];
+        const components = [
           new MessageButtonBuilder()
             .setCustomId(customIdMap.reload)
             .setStyle("PRIMARY")
             .setEmoji("🔁")
             .setLabel(t("commands:effect.effectControllPanel.reload")),
-          new MessageButtonBuilder()
-            .setCustomId(customIdMap.bassBoost)
-            .setStyle(context.server.effectPrefs.BassBoost ? "SUCCESS" : "SECONDARY")
-            .setLabel("Bass Boost"),
-          new MessageButtonBuilder()
-            .setCustomId(customIdMap.reverb)
-            .setStyle(context.server.effectPrefs.Reverb ? "SUCCESS" : "SECONDARY")
-            .setLabel("Reverb"),
-          new MessageButtonBuilder()
-            .setCustomId(customIdMap.loudnessEq)
-            .setStyle(context.server.effectPrefs.LoudnessEqualization ? "SUCCESS" : "SECONDARY")
-            .setLabel("Loudness Eq")
-        )
-        .toOceanic();
+          ...context.server.audioEffects.createMessageButtons(customIdMap),
+        ];
+        for(let i = 0; i < Math.ceil(components.length / 5); i++){
+          rows.push(
+            new MessageActionRowBuilder()
+              .addComponents(...components.slice(i * 5, (i + 1) * 5))
+              .toOceanic()
+          );
+        }
+
+        return rows;
+      };
 
       const reply = await message.reply({
-        embeds: [createEffectEmbed()],
-        components: [createActionRow()],
+        embeds: [context.server.audioEffects.createEmbed(message.member.avatarURL())],
+        components: createActionRow(),
       });
-      const updateEffectEmbed = () => {
+      const updateEffectEmbed = (emptyrow = false) => {
         reply.edit({
-          embeds: [createEffectEmbed()],
-          components: [createActionRow()],
+          embeds: [context.server.audioEffects.createEmbed(message.member.avatarURL())],
+          components: emptyrow ? [] : createActionRow(),
         }).catch(this.logger.error);
       };
-      collector
-        .on("reload", updateEffectEmbed)
-        .on("bassBoost", () => {
-          context.server.effectPrefs.BassBoost = !context.server.effectPrefs.BassBoost;
-          updateEffectEmbed();
-        })
-        .on("reverb", () => {
-          context.server.effectPrefs.Reverb = !context.server.effectPrefs.Reverb;
-          updateEffectEmbed();
-        })
-        .on("loudnessEq", () => {
-          context.server.effectPrefs.LoudnessEqualization = !context.server.effectPrefs.LoudnessEqualization;
+      collector.on("reload", () => updateEffectEmbed());
+      collector.on("timeout", () => updateEffectEmbed(true));
+
+      for(const effectName of audioEffectNames){
+        collector.on(effectName, () => {
+          context.server.audioEffects.toggle(effectName);
           updateEffectEmbed();
         });
+      }
     }
     catch(e){
       this.logger.error(e);

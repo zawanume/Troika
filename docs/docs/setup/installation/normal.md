@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 3
 ---
 # クローンして実行する
 リポジトリを [git](https://git-scm.com/) でクローンして実行することができます。
@@ -9,10 +9,10 @@ sidebar_position: 1
 
 ### 必須な環境
 
-- [Node.js](https://nodejs.org/) (v16.16以上のv16.x、v18.x)がサポートされていて、インストールされていること。
-- [npm](https://www.npmjs.com/) が利用できること。
-- [ffmpeg](https://ffmpeg.org/) が利用できること。
-- [git](https://git-scm.com/) が利用できること。
+- [Node.js](https://nodejs.org/) (v16.4以上のv16.x、v18.x、v20.x)がサポートされていて、インストールされていること。
+- [npm](https://www.npmjs.com/) がインストールされており、利用できること。
+- [git](https://git-scm.com/) がインストールされており、利用できること。
+- [ffmpeg](https://ffmpeg.org/) がサポートされている環境であること。
 - C++のビルドツールがインストールされていること。
   - ネイティブな依存関係のビルドに使用されます。
   - Windowsの場合Node.jsのインストール時に、node-gypのビルドツールをインストールするかを聞かれます。
@@ -53,13 +53,16 @@ git clone https://github.com/mtripg6666tdr/Discord-SimpleMusicBot.git
 # カレントディレクトリ移動
 cd Discord-SimpleMusicBot
 ```
-masterブランチは開発用のブランチでもあり、未修正のバグが含まれている可能性があるため、最新のバージョンを指定することをお勧めします。
-例えば、v3.4.0を使用する場合、以下のようにします。
+masterブランチは開発用のブランチでもあり、未修正のバグが含まれている可能性があるため、**必ず、最新のバージョンを利用するようにしてください**。
+これには、`git reset`コマンドを実行してください。例えば、v3.4.0を使用する場合、以下のようにします。
 ```bash
 git reset --hard v3.4.0
 ```
+:::info
+最新のバージョンは、[リリースページ](https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/releases)で確認してください。
+:::
 
-以下のコマンドで、依存関係のパッケージをインストールします。
+バージョンの切り替えができたら、以下のコマンドで、依存関係のパッケージをインストールします。
 ```bash
 # 必須パッケージインストール
 npm install
@@ -87,9 +90,9 @@ npm run start
 
 次回から起動する際は、`npm run onlystart`だけで起動することができます。
 
-なお、スラッシュコマンドは、起動時に自動的に追加されるようになりました。スラッシュコマンドについての詳細は、[あとのページ](../feature/1-slashcommand.md)で解説しています。
+なお、スラッシュコマンドは、起動時に自動的に追加されるようになっています。スラッシュコマンドについての詳細は、[あとのページ](../feature/1-slashcommand.md)で解説しています。
 
-## コードの更新
+## ボットの更新
 本ボットを最新のソースコードに更新するには、以下のような操作を行ってください。
 ```bash
 # ソースコードの更新
@@ -109,3 +112,23 @@ npm run onlystart
 npm run start
 ```
 :::
+
+<details>
+  <summary>新しいビルドスクリプトを使用する(ベータ版・v4.3以降)</summary>
+
+v4.3以降では、このページで紹介している`npm run build`によるビルドに加え、
+新しいビルドスクリプトを導入しています。  
+※Dockerイメージのビルド時にはこちらが使用されています。
+
+ベータ版ですが、出力されるファイル数が少なくなり、パフォーマンスが向上するため、
+ぜひお試しください。
+
+新しいビルドスクリプトは、`npm run build`の代わりに、
+```sh
+npm run build:bundled
+```
+を実行することでご利用いただけます。
+
+それ以外の手順やコマンドは同じとなります。
+
+</details>

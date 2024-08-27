@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,18 +16,16 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { exportableStatuses } from ".";
 import type { YmxFormat } from "../../Structure";
 import type { DataType, MusicBotBase } from "../../botBase";
-
-import candyget from "candyget";
-import PQueue from "p-queue";
+import type { JSONStatuses } from "../../types/GuildStatuses";
 
 import { IntervalBackupper } from ".";
-import { timeLoggedMethod } from "../../logger";
+import { measureTime } from "../../Util/decorators";
+import { ReplitClient } from "../replitDatabaseClient";
 
 export class ReplitBackupper extends IntervalBackupper {
-  protected readonly db: ReplitClient = null;
+  protected readonly db: ReplitClient = null!;
 
   static get backuppable(){
     return process.env.DB_URL?.startsWith("replit+http");
@@ -36,7 +34,7 @@ export class ReplitBackupper extends IntervalBackupper {
   constructor(bot: MusicBotBase, getData: () => DataType){
     super(bot, getData, "Replit");
 
-    this.db = new ReplitClient(process.env.DB_URL.substring("replit+".length));
+    this.db = new ReplitClient(process.env.DB_URL!.substring("replit+".length));
 
     this.bot.client.on("guildDelete", ({ id }) => {
       Promise.allSettled([
@@ -46,7 +44,7 @@ export class ReplitBackupper extends IntervalBackupper {
     });
   }
 
-  @timeLoggedMethod
+  @measureTime
   protected override async backupStatus(){
     if(!this.db) return;
 
@@ -58,7 +56,8 @@ export class ReplitBackupper extends IntervalBackupper {
       const guildId = filteredGuildIds[i];
       try{
         this.logger.info(`Backing up status...(${guildId})`);
-        const currentStatus = this.data.get(guildId).exportStatus();
+        const currentStatus = this.data.get(guildId)?.exportStatus();
+        if(!currentStatus) continue;
         await this.db.set(this.getDbKey("status", guildId), currentStatus);
         this.updateStatusCache(guildId, currentStatus);
       }
@@ -69,7 +68,7 @@ export class ReplitBackupper extends IntervalBackupper {
     }
   }
 
-  @timeLoggedMethod
+  @measureTime
   protected override async backupQueue(){
     if(!this.db) return;
     const modifiedGuildIds = this.getQueueModifiedGuildIds();
@@ -77,7 +76,9 @@ export class ReplitBackupper extends IntervalBackupper {
       const guildId = modifiedGuildIds[i];
       try{
         this.logger.info(`Backing up queue...(${guildId})`);
-        await this.db.set(this.getDbKey("queue", guildId), this.data.get(guildId).exportQueue());
+        const queue = this.data.get(guildId)?.exportQueue();
+        if(!queue) continue;
+        await this.db.set(this.getDbKey("queue", guildId), queue);
         this.unmarkQueueModifiedGuild(guildId);
       }
       catch(er){
@@ -87,11 +88,11 @@ export class ReplitBackupper extends IntervalBackupper {
     }
   }
 
-  @timeLoggedMethod
-  override async getQueueDataFromBackup(guildIds: string[]): Promise<Map<string, YmxFormat>> {
+  @measureTime
+  override async getQueueDataFromBackup(guildIds: string[]) {
     const result = new Map<string, YmxFormat>();
     try{
-      await Promise.all(
+      await Promise.allSettled(
         guildIds.map(async id => {
           const queue = await this.db.get<YmxFormat>(this.getDbKey("queue", id));
           if(queue){
@@ -108,13 +109,13 @@ export class ReplitBackupper extends IntervalBackupper {
     }
   }
 
-  @timeLoggedMethod
-  override async getStatusFromBackup(guildIds: string[]): Promise<Map<string, exportableStatuses>> {
-    const result = new Map<string, exportableStatuses>();
+  @measureTime
+  override async getStatusFromBackup(guildIds: string[]) {
+    const result = new Map<string, JSONStatuses>();
     try{
-      await Promise.all(
+      await Promise.allSettled(
         guildIds.map(async id => {
-          const status = await this.db.get<exportableStatuses>(this.getDbKey("status", id));
+          const status = await this.db.get<JSONStatuses>(this.getDbKey("status", id));
           if(status){
             result.set(id, status);
             this.updateStatusCache(id, status);
@@ -135,70 +136,5 @@ export class ReplitBackupper extends IntervalBackupper {
   }
 
   override destroy(){
-  }
-}
-
-class ReplitClient {
-  protected baseUrl: string;
-  protected queue: PQueue;
-
-  constructor(baseUrl?: string){
-    this.baseUrl = baseUrl;
-    if(baseUrl === "local" || !this.baseUrl){
-      this.baseUrl = process.env.REPLIT_DB_URL;
-    }
-
-    if(!this.baseUrl){
-      throw new Error("No URL found");
-    }
-
-    this.queue = new PQueue({
-      concurrency: 3,
-      timeout: 10e3,
-      throwOnTimeout: true,
-      intervalCap: 4,
-      interval: 10,
-    });
-  }
-
-  get(key: string, options: { raw: true }): Promise<string>;
-  get<T = any>(key: string, options?: { raw: false }): Promise<T>;
-  get<T = any>(key: string, options?: { raw: boolean }){
-    return this.queue.add(async () => {
-      const shouldRaw = options?.raw || false;
-      const { body } = await candyget(`${this.baseUrl}/${key}`, "string");
-      if(!body){
-        return null;
-      }else if(shouldRaw){
-        return body;
-      }else{
-        return JSON.parse(body) as T;
-      }
-    });
-  }
-
-  set(key: string, value: any){
-    return this.queue.add(async () => {
-      const textData = JSON.stringify(value);
-
-      const { statusCode } = await candyget.post(this.baseUrl, "empty", {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }, `${encodeURIComponent(key)}=${encodeURIComponent(textData)}`);
-
-      if(statusCode >= 200 && statusCode <= 299){
-        return this;
-      }else{
-        throw new Error(`Status code: ${statusCode}`);
-      }
-    });
-  }
-
-  delete(key: string){
-    return this.queue.add(async () => {
-      await candyget.delete(`${this.baseUrl}/${key}`, "empty");
-      return this;
-    });
   }
 }

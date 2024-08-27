@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -23,7 +23,7 @@ import type { MusicBot } from "../bot";
 import i18next from "i18next";
 import * as discord from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { CommandMessage } from "../Component/commandResolver/CommandMessage";
 import { GuildDataContainerWithBgm } from "../Structure/GuildDataContainerWithBgm";
 import { discordUtil } from "../Util";
@@ -53,8 +53,10 @@ export async function handleCommandInteraction(this: MusicBot, server: GuildData
     return;
   }
 
+  // メッセージライクに解決してコマンドメッセージに
+  const commandMessage = CommandMessage.createFromInteraction(interaction);
   // コマンドを解決
-  const command = CommandManager.instance.resolve(interaction.data.name);
+  const command = CommandManager.instance.resolve(commandMessage.command);
   if(!command){
     await interaction.createMessage({
       content: `${i18next.t("commandNotFound", { lng: interaction.locale })}:sob:`,
@@ -67,13 +69,6 @@ export async function handleCommandInteraction(this: MusicBot, server: GuildData
     return;
   }
 
-  // 応答遅延するべきコマンドならば遅延
-  if(command.shouldDefer){
-    await interaction.defer();
-  }
-
-  // メッセージライクに解決してコマンドメッセージに
-  const commandMessage = CommandMessage.createFromInteraction(interaction);
   // プレフィックス更新
   server.updatePrefix(commandMessage);
   // コマンドを実行

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { BaseCommand } from ".";
 
@@ -33,10 +32,12 @@ export default class End extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     if(!context.server.player.isPlaying){
-      message.reply(t("errorOccurred")).catch(this.logger.error);
+      message.reply(t("notPlaying")).catch(this.logger.error);
       return;
     }
     if(context.server.queue.length <= 1){

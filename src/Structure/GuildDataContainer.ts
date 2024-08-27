@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,46 +16,48 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { AudioEffect } from "./AudioEffect";
-import type { CommandArgs } from "./Command";
-import type { YmxFormat } from "./YmxFormat";
-import type { exportableCustom, exportableSpotify } from "../AudioSource";
-import type { SearchPanel } from "../Component/SearchPanel";
-import type { exportableStatuses } from "../Component/backupper";
+import type { AudioSourceBasicJsonFormat, SpotifyJsonFormat } from "../AudioSource";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
+import type { SearchPanel } from "../Component/searchPanel";
 import type { MusicBotBase } from "../botBase";
+import type { CommandArgs } from "../types/Command";
+import type { JSONStatuses } from "../types/GuildStatuses";
+import type { QueueContent } from "../types/QueueContent";
+import type { YmxFormat } from "../types/YmxFormat";
 import type { VoiceConnection } from "@discordjs/voice";
-import type { i18n } from "i18next";
-import type { AnyGuildTextChannel, Message, StageChannel, VoiceChannel } from "oceanic.js";
+import type { AnyTextableGuildChannel, Message, StageChannel, VoiceChannel } from "oceanic.js";
 import type { TextChannel } from "oceanic.js";
 import type { Playlist } from "spotify-url-info";
 
+import { entersState, VoiceConnectionStatus } from "@discordjs/voice";
 import { LockObj, lock } from "@mtripg6666tdr/async-lock";
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
-
-import { entersState, VoiceConnectionStatus } from "@discordjs/voice";
 import Soundcloud from "soundcloud.ts";
-import * as ytpl from "ytpl";
 
 import { LogEmitter } from "./LogEmitter";
-import { YmxVersion } from "./YmxFormat";
 import { Spotify } from "../AudioSource";
 import { SoundCloudS } from "../AudioSource";
-import { PlayManager } from "../Component/PlayManager";
-import { QueueManager } from "../Component/QueueManager";
-import { SearchPanelManager } from "../Component/SearchPanelManager";
-import { SkipManager } from "../Component/SkipManager";
-import { TaskCancellationManager } from "../Component/TaskCancellationManager";
+import { Playlist as ytpl } from "../AudioSource/youtube/playlist";
+import { getCommandExecutionContext } from "../Commands";
+import { AudioEffectManager } from "../Component/audioEffectManager";
+import { PlayManager } from "../Component/playManager";
+import { GuildPreferencesManager } from "../Component/preferencesManager";
+import { QueueManager } from "../Component/queueManager";
+import { SearchPanelManager } from "../Component/searchPanelManager";
+import { SkipSession } from "../Component/skipSession";
+import { TaskCancellationManager } from "../Component/taskCancellationManager";
 import * as Util from "../Util";
-import { useConfig } from "../config";
+import { getConfig } from "../config";
+import { DefaultAudioThumbnailURL } from "../definition";
 import { discordLanguages } from "../i18n";
 import { getLogger } from "../logger";
+import { YmxVersion } from "../types/YmxFormat";
 
 interface GuildDataContainerEvents {
   updateBoundChannel: [string];
 }
 
-const config = useConfig();
+const config = getConfig();
 
 /**
  * サーバーごとデータを保存するコンテナ
@@ -69,28 +71,49 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
   /** プレフィックス */
   prefix: string;
 
+
+  // キューマネージャー
   protected _queue: QueueManager;
   /** キューマネジャ */
   get queue(){
     return this._queue;
   }
 
+
+  // プレーマネージャー
   protected _player: PlayManager;
   /** 再生マネジャ */
   get player(){
     return this._player;
   }
 
+
+  // 検索パネルマネージャー
   protected _searchPanel: SearchPanelManager;
-  /** 検索窓の格納します */
+  /** 検索パネルマネジャ */
   get searchPanel(){
     return this._searchPanel;
   }
 
-  protected _skipSession: SkipManager;
-  /** Skipマネージャ */
+
+  protected _audioEffects: AudioEffectManager;
+  /** オーディオエフェクトマネジャ */
+  get audioEffects(){
+    return this._audioEffects;
+  }
+
+
+  protected _skipSession: SkipSession | null = null;
+  /** スキップセッション */
   get skipSession(){
     return this._skipSession;
+  }
+
+
+  protected _preferences: GuildPreferencesManager;
+  /** 設定 */
+  get preferences(){
+    return this._preferences;
   }
 
   private _boundTextChannel: string;
@@ -105,25 +128,20 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
 
   /** メインボット */
   readonly bot: MusicBotBase;
-  /** オーディオエフェクトエフェクトの設定 */
-  readonly effectPrefs: AudioEffect;
-  /** 関連動画自動追加が有効 */
-  addRelated: boolean;
-  /** 均等再生が有効 */
-  equallyPlayback: boolean;
+
   /** VCへの接続 */
-  connection: VoiceConnection;
+  connection: VoiceConnection | null;
   /** VC */
-  connectingVoiceChannel: VoiceChannel | StageChannel;
+  connectingVoiceChannel: VoiceChannel | StageChannel | null;
 
   get locale(){
-    const guild = this.bot.client.guilds.get(this.getGuildId());
+    const guild = this.bot.client.guilds.get(this.getGuildId())!;
 
     // try to get the locale from the roles assigned to the bot, if present.
     const localeRegex = /\[locale:(?<locale>[a-z]{0,2}(-[A-Z]{0,2})?)\]$/;
-    const localeRole = guild.clientMember.roles.map(roleId => guild.roles.get(roleId).name).find(role => localeRegex.test(role));
-    if(localeRole && discordLanguages.includes(localeRole.match(localeRegex).groups.locale)){
-      return localeRole.match(localeRegex).groups.locale;
+    const localeRole = guild.clientMember.roles.map(roleId => guild.roles.get(roleId)!.name).find(role => localeRegex.test(role));
+    if(localeRole && discordLanguages.includes(localeRole.match(localeRegex)!.groups!.locale)){
+      return localeRole.match(localeRegex)!.groups!.locale;
     }
 
     // try to get the default locale from the guild settings, if its community feature enabled.
@@ -141,21 +159,16 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
     }
     this.boundTextChannel = boundchannelid;
     if(!this.boundTextChannel){
-      throw new Error("invalid bound textchannel id was given");
+      throw new Error("Invalid bound textchannel id was given");
     }
     this.bot = bot;
-    this.addRelated = false;
-    this.effectPrefs = {
-      BassBoost: false,
-      Reverb: false,
-      LoudnessEqualization: false,
-    };
     this.prefix = ">";
-    this.equallyPlayback = false;
     this.connection = null;
     this.initPlayManager();
     this.initQueueManager();
     this.initSearchPanelManager();
+    this.initAudioEffects();
+    this.initPreferences();
   }
 
   // 子クラスでオーバーライドされる可能性があるので必要
@@ -163,21 +176,30 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
     this._player = new PlayManager(this);
   }
 
-  // 子クラスでオーバーライドされる可能性があるので必要
+  // 同上
   protected initQueueManager(){
     this._queue = new QueueManager(this);
   }
 
-  // 子クラスでオーバーライドされる可能性があるので必要
+  // 同上
   protected initSearchPanelManager(){
     this._searchPanel = new SearchPanelManager(this);
+  }
+
+  // 同上
+  protected initAudioEffects(){
+    this._audioEffects = new AudioEffectManager(this);
+  }
+
+  protected initPreferences(){
+    this._preferences = new GuildPreferencesManager(this);
   }
 
   /**
    * 状況に応じてバインドチャンネルを更新します
    * @param message 更新元となるメッセージ
    */
-  updateBoundChannel(message: CommandMessage|string){
+  updateBoundChannel(message: CommandMessage | string){
     if(typeof message === "string"){
       this.boundTextChannel = message;
       return;
@@ -186,7 +208,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       !this.player.isConnecting
       || (
         message.member.voiceState?.channelID
-        && this.bot.client.getChannel<VoiceChannel|StageChannel>(message.member.voiceState.channelID)
+        && this.bot.client.getChannel<VoiceChannel | StageChannel>(message.member.voiceState.channelID)!
           .voiceMembers.has(this.bot.client.user.id)
       )
       || message.content.includes("join")
@@ -202,10 +224,12 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
   exportQueue(): YmxFormat{
     return {
       version: YmxVersion,
-      data: this.queue.map(q => ({
-        ...q.basicInfo.exportData(),
-        addBy: q.additionalInfo.addedBy,
-      })),
+      data: this.queue
+        .filter(item => !item.basicInfo.isPrivateSource)
+        .map(q => ({
+          ...q.basicInfo.exportData(),
+          addBy: q.additionalInfo.addedBy,
+        })),
     };
   }
 
@@ -234,16 +258,15 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * ステータスをエクスポートします
    * @returns ステータスのオブジェクト
    */
-  exportStatus(): exportableStatuses{
+  exportStatus(): JSONStatuses {
     // VCのID:バインドチャンネルのID:ループ:キューループ:関連曲
     return {
-      voiceChannelId: this.player.isPlaying && !this.player.isPaused ? this.connectingVoiceChannel.id : "0",
+      voiceChannelId: this.player.isPlaying && !this.player.isPaused ? this.connectingVoiceChannel!.id : "0",
       boundChannelId: this.boundTextChannel,
       loopEnabled: this.queue.loopEnabled,
       queueLoopEnabled: this.queue.queueLoopEnabled,
-      addRelatedSongs: this.addRelated,
-      equallyPlayback: this.equallyPlayback,
       volume: this.player.volume,
+      ...this.preferences.exportPreferences(),
     };
   }
 
@@ -251,12 +274,11 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * ステータスをオブジェクトからインポートします。
    * @param param0 読み取り元のオブジェクト
    */
-  importStatus(statuses: exportableStatuses){
+  importStatus(statuses: JSONStatuses): void {
     //VCのID:バインドチャンネルのID:ループ:キューループ:関連曲
-    this.queue.loopEnabled = statuses.loopEnabled;
-    this.queue.queueLoopEnabled = statuses.queueLoopEnabled;
-    this.addRelated = statuses.addRelatedSongs;
-    this.equallyPlayback = statuses.equallyPlayback;
+    this.queue.loopEnabled = !!statuses.loopEnabled;
+    this.queue.queueLoopEnabled = !!statuses.queueLoopEnabled;
+    this.preferences.importPreferences(statuses);
     this.player.setVolume(statuses.volume);
     if(statuses.voiceChannelId !== "0"){
       this.joinVoiceChannelOnly(statuses.voiceChannelId)
@@ -304,7 +326,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * @internal
    */
   async joinVoiceChannelOnly(channelId: string){
-    const targetChannel = this.bot.client.getChannel<VoiceChannel | StageChannel>(channelId);
+    const targetChannel = this.bot.client.getChannel<VoiceChannel | StageChannel>(channelId)!;
     const connection = targetChannel.join({
       selfDeaf: true,
       debug: config.debug,
@@ -314,18 +336,19 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
 
     await entersState(connection, VoiceConnectionStatus.Ready, 10e3);
 
-    const connectionLogger = getLogger("Connection");
+    const connectionLogger = getLogger("Connection", true);
     connectionLogger.addContext("id", this.getGuildId());
     connection.on("error", err => {
       connectionLogger.error(err);
     });
+
     this.connection = connection;
     if(config.debug){
       connection.on("debug", connectionLogger.trace);
     }
 
     // ニックネームの変更
-    const guild = this.bot.client.guilds.get(this.getGuildId());
+    const guild = this.bot.client.guilds.get(this.getGuildId())!;
     const botSelf = guild.clientMember;
     let nickname = botSelf.nick;
     // "⏹" これ
@@ -338,8 +361,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       }).catch(this.logger.error);
       // ニックネームを元に戻すやつ
       connection.once(VoiceConnectionStatus.Destroyed, () => {
-        nickname = nickname.replace("🈵", "🈳");
-        nickname = nickname.replace("▶", stopButton);
+        nickname = nickname!.replace("🈵", "🈳").replace("▶", stopButton);
         guild.editCurrentMember({
           nick: nickname,
         }).catch(this.logger.error);
@@ -359,12 +381,13 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    */
   async joinVoiceChannel(
     message: CommandMessage,
-    { reply = false, replyOnFail = false }: { reply?: boolean, replyOnFail?: boolean },
-    t: i18n["t"]
+    { reply = false, replyOnFail = false }: { reply?: boolean, replyOnFail?: boolean }
   ): Promise<boolean>{
     return lock(this.joinVoiceChannelLocker, async () => {
+      const { t } = getCommandExecutionContext();
+
       if(message.member.voiceState?.channelID){
-        const targetVC = this.bot.client.getChannel<VoiceChannel | StageChannel>(message.member.voiceState.channelID);
+        const targetVC = this.bot.client.getChannel<VoiceChannel | StageChannel>(message.member.voiceState.channelID)!;
 
         if(targetVC.voiceMembers.has(this.bot.client.user.id)){
           // すでにそのにVC入ってるよ～
@@ -435,34 +458,57 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * メッセージからストリームを判定してキューに追加し、状況に応じて再生を開始します
    * @param first キューの先頭に追加するかどうか
    */
-  async playFromURL(
+  async playFromUrl(
     message: CommandMessage,
-    rawArg: string|string[],
-    { first = true, cancellable = false }: { first?: boolean, cancellable?: boolean },
-    t: i18n["t"]
-  ){
+    rawArg: string | string[],
+    {
+      first = false,
+      cancellable = false,
+      privateSource = false,
+    }: {
+      first?: boolean,
+      cancellable?: boolean,
+      privateSource?: boolean,
+    }
+  ): Promise<QueueContent[]> {
+    const { t } = getCommandExecutionContext();
+
     if(Array.isArray(rawArg)){
       const [firstUrl, ...restUrls] = rawArg
         .flatMap(fragment => Util.normalizeText(fragment).split(" "))
         .filter(url => url.startsWith("http"));
+      const results: (QueueContent | null)[] = [];
 
       if(firstUrl){
-        await this.playFromURL(message, firstUrl, { first, cancellable: false }, t);
+        results.push(...await this.playFromUrl(message, firstUrl, { first, cancellable: false }));
 
         if(restUrls){
           for(let i = 0; i < restUrls.length; i++){
-            await this.queue.addQueue({
-              url: restUrls[i],
-              addedBy: message.member,
-              channel: message.channel,
-            });
+            results.push(
+              await this.queue.addQueue({
+                url: restUrls[i],
+                addedBy: message.member,
+                channel: message.channel,
+                privateSource,
+              })
+            );
           }
         }
       }
-      return;
+      return results.filter(d => d) as QueueContent[];
     }
     setTimeout(() => message.suppressEmbeds(true).catch(this.logger.error), 4000).unref();
 
+    // Spotifyの短縮リンクを展開
+    if(rawArg.match(/^https?:\/\/spotify.link\/[a-zA-Z\d]+$/)){
+      const result = await Spotify.expandShortenLink(rawArg);
+      if(result){
+        rawArg = result.url;
+      }
+    }
+
+
+    // 各種特殊ソースの解釈
     if(
       !config.isDisabledSource("custom")
       && rawArg.match(/^https?:\/\/(www\.|canary\.|ptb\.)?discord(app)?\.com\/channels\/[0-9]+\/[0-9]+\/[0-9]+$/)
@@ -474,7 +520,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
         const ids = rawArg.split("/");
         const ch = this.bot.client.getChannel<TextChannel>(ids[ids.length - 2]);
 
-        if(!("getMessage" in ch) || typeof ch.getMessage !== "function"){
+        if(!ch || !("getMessage" in ch) || typeof ch.getMessage !== "function"){
           throw new Error(t("guildDataContainer.notTextChannel"));
         }
 
@@ -482,75 +528,107 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
 
         if(ch.guild.id !== msg.channel.guild.id){
           throw new Error(t("guildDataContainer.unableToPlayOtherServer"));
-        }else if(msg.attachments.size <= 0 || !Util.isAvailableRawAudioURL(msg.attachments.first()?.url)){
+        }else if(msg.attachments.size <= 0 || Util.getResourceTypeFromUrl(msg.attachments.first()?.url || null) === "none"){
           throw new Error(t("guildDataContainer.attachmentNotFound"));
         }
 
-        await this.queue.addQueue({
-          url: msg.attachments.first().url,
+        const item = await this.queue.addQueue({
+          url: msg.attachments.first()!.url,
           addedBy: message.member,
           first,
+          cancellable,
           message: smsg,
+          privateSource,
         });
-        await this.player.play();
-        return;
+
+        if(!item){
+          return [];
+        }
+
+        await this.player.play({ bgm: false });
+        return [item];
       }
       catch(e){
         this.logger.error(e);
         await smsg.edit(`✘${t("components:queue.failedToAdd")}`)
           .catch(this.logger.error);
+        return [];
       }
-    }else if(!config.isDisabledSource("custom") && Util.isAvailableRawAudioURL(rawArg)){
-      // オーディオファイルへの直リンク？
-      await this.queue.addQueue({
+    }
+
+
+    // オーディオファイルへの直リンク？
+    else if(!config.isDisabledSource("custom") && Util.getResourceTypeFromUrl(rawArg) !== "none"){
+      const item = await this.queue.addQueue({
         url: rawArg,
         addedBy: message.member,
         sourceType: "custom",
+        cancellable,
         first,
-        message: await message.reply(t("pleaseWait")),
+        message,
+        privateSource,
       });
-      await this.player.play();
-    }else if(
+
+      if(!item){
+        return [];
+      }
+
+      await this.player.play({ bgm: false });
+      return [item];
+    }
+
+
+    // youtubeのプレイリストへのリンク
+    else if(
       !config.isDisabledSource("youtube")
       && !rawArg.includes("v=")
       && !rawArg.includes("/channel/")
-      && ytpl.validateID(rawArg)){
-      //違うならYouTubeプレイリストの直リンクか？
+      && ytpl.validateID(rawArg)
+    ){
       const msg = await message.reply(`:hourglass_flowing_sand:${t("components:queue.processingPlaylistBefore")}`);
       const cancellation = this.bindCancellation(new TaskCancellationManager());
+      let items: QueueContent[] = null!;
       try{
         const id = await ytpl.getPlaylistID(rawArg);
-        const result = await ytpl.default(id, {
+        const result = await ytpl(id, {
           gl: "JP",
           hl: "ja",
           limit: 999 - this.queue.length,
         });
-        const index = await this.queue.processPlaylist(
+        items = await this.queue.processPlaylist(
           msg,
           cancellation,
           false,
           /* known source */ "youtube",
           /* result */ result.items,
           /* playlist name */ result.title,
-          /* tracks count */ result.estimatedItemCount,
+          /* tracks count */ result.itemCount,
           /* consumer */ (c) => ({
             url: c.url,
-            channel: c.author.name,
+            channel: c.author,
             description: t("components:queue.noDescriptionInPlaylist"),
             isLive: c.isLive,
-            length: c.durationSec,
-            thumbnail: c.thumbnails[0].url,
+            length: c.duration,
+            thumbnail: c.thumbnail,
             title: c.title,
-          } as exportableCustom)
+          } as AudioSourceBasicJsonFormat)
         );
-        if(cancellation.Cancelled){
+        if(cancellation.cancelled){
           await msg.edit(`✅${t("canceled")}`);
         }else{
           const embed = new MessageEmbedBuilder()
             .setTitle(`✅${t("components:queue.processingPlaylistCompleted")}`)
             // \`(${result.author.name})\` author has been null lately
-            .setDescription(`[${result.title}](${result.url}) \r\n${t("components:queue.songsAdded", { count: index })}`)
-            .setThumbnail(result.bestThumbnail.url)
+            .setDescription(
+              `${
+                result.visibility === "unlisted"
+                  ? result.title
+                  : `[${result.title}](${result.url})`
+              }\r\n${
+                t("components:queue.songsAdded", { count: items.length })
+              }`
+            )
+            .setThumbnail(result.thumbnailUrl || DefaultAudioThumbnailURL)
             .setColor(Util.color.getColor("PLAYLIST_COMPLETED"));
           await msg.edit({
             content: "",
@@ -567,14 +645,20 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       finally{
         this.unbindCancellation(cancellation);
       }
-      await this.player.play();
-    }else if(!config.isDisabledSource("soundcloud") && SoundCloudS.validatePlaylistUrl(rawArg)){
+      await this.player.play({ bgm: false });
+      return items;
+    }
+
+
+    // SoundCloudのプレイリスト
+    else if(!config.isDisabledSource("soundcloud") && SoundCloudS.validatePlaylistUrl(rawArg)){
       const msg = await message.reply(`:hourglass_flowing_sand:${t("components:queue.processingPlaylistBefore")}`);
       const sc = new Soundcloud();
       const playlist = await sc.playlists.getV2(rawArg);
       const cancellation = this.bindCancellation(new TaskCancellationManager());
+      let items: QueueContent[] = null!;
       try{
-        const index = await this.queue.processPlaylist(
+        items = await this.queue.processPlaylist(
           msg,
           cancellation,
           false,
@@ -591,19 +675,19 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
               length: Math.floor(item.duration / 1000),
               author: item.user.username,
               thumbnail: item.artwork_url,
-            } as exportableCustom;
+            } as AudioSourceBasicJsonFormat;
           }
         );
-        if(cancellation.Cancelled){
+        if(cancellation.cancelled){
           await msg.edit(`✅${t("canceled")}`);
         }else{
           const embed = new MessageEmbedBuilder()
             .setTitle(`✅${t("components:queue.processingPlaylistCompleted")}`)
             .setDescription(
               `[${playlist.title}](${playlist.permalink_url}) \`(${playlist.user.username})\` \r\n`
-              + `${t("components:queue.songsAdded", { count: index })}`
+              + `${t("components:queue.songsAdded", { count: items.length })}`
             )
-            .setThumbnail(playlist.artwork_url)
+            .setThumbnail(playlist.artwork_url!)
             .setColor(Util.color.getColor("PLAYLIST_COMPLETED"));
           await msg.edit({ content: "", embeds: [embed.toOceanic()] });
         }
@@ -617,14 +701,20 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       finally{
         this.unbindCancellation(cancellation);
       }
-      await this.player.play();
-    }else if(!config.isDisabledSource("spotify") && Spotify.validatePlaylistUrl(rawArg) && Spotify.available){
+      await this.player.play({ bgm: false });
+      return items;
+    }
+
+
+    // Spotifyのプレイリスト
+    else if(!config.isDisabledSource("spotify") && Spotify.validatePlaylistUrl(rawArg) && Spotify.available){
       const msg = await message.reply(`:hourglass_flowing_sand:${t("components:queue.processingPlaylistBefore")}`);
       const cancellation = this.bindCancellation(new TaskCancellationManager());
+      let items: QueueContent[] = null!;
       try{
         const playlist = await Spotify.client.getData(rawArg) as Playlist;
         const tracks = playlist.trackList;
-        const index = await this.queue.processPlaylist(
+        items = await this.queue.processPlaylist(
           msg,
           cancellation,
           false,
@@ -638,10 +728,10 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
               title: track.title,
               artist: track.subtitle,
               length: Math.floor(track.duration / 1000),
-            } as exportableSpotify;
+            } as SpotifyJsonFormat;
           }
         );
-        if(cancellation.Cancelled){
+        if(cancellation.cancelled){
           await msg.edit(`✅${t("canceled")}`);
         }else{
           const embed = new MessageEmbedBuilder()
@@ -649,7 +739,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
             .setDescription(
               `[${playlist.title}](${
                 Spotify.getPlaylistUrl(playlist.uri, playlist.type)
-              }) \`(${playlist.subtitle})\` \r\n${t("components:queue.songsAdded", { count: index })}`
+              }) \`(${playlist.subtitle})\` \r\n${t("components:queue.songsAdded", { count: items.length })}`
             )
             .setThumbnail(playlist.coverArt.sources[0].url)
             .setFields({
@@ -668,51 +758,65 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       finally{
         this.unbindCancellation(cancellation);
       }
-      await this.player.play();
-    }else{
+      await this.player.play({ bgm: false });
+      return items;
+    }
+
+
+    // その他の通常のURLを解釈
+    else{
       try{
         const success = await this.queue.addQueue({
           url: rawArg,
           addedBy: message.member,
           first,
-          message: await message.reply(`${t("pleaseWait")}...`),
+          message,
           cancellable,
+          privateSource,
         });
-        if(success){
-          await this.player.play();
+        if(!success){
+          return [];
         }
-        return;
+
+        await this.player.play({ bgm: false });
+
+        return [success];
       }
       catch(er){
         this.logger.error(er);
         // なに指定したし…
         await message.reply(`🔭${t("guildDataContainer.invalidUrl")}`)
           .catch(this.logger.error);
+        return [];
       }
     }
   }
 
   async playFromMessage(
     commandMessage: CommandMessage,
-    message: Message<AnyGuildTextChannel>,
+    message: Message<AnyTextableGuildChannel>,
     context: CommandArgs,
     morePrefs: { first?: boolean, cancellable?: boolean },
-    t: i18n["t"],
   ){
+    const { t } = getCommandExecutionContext();
     const prefixLength = context.server.prefix.length;
+
     if(message.content.startsWith("http://") || message.content.startsWith("https://")){
       // URLのみのメッセージか？
-      await context.server.playFromURL(commandMessage, message.content, morePrefs, t);
+      await context.server.playFromUrl(commandMessage, message.content, morePrefs);
+      return;
     }else if(
       message.content.substring(prefixLength).startsWith("http://")
         || message.content.substring(prefixLength).startsWith("https://")
     ){
       // プレフィックス+URLのメッセージか？
-      await context.server.playFromURL(commandMessage, message.content.substring(prefixLength), morePrefs, t);
+      await context.server.playFromUrl(commandMessage, message.content.substring(prefixLength), morePrefs);
+      return;
     }else if(message.attachments.size > 0){
       // 添付ファイル付きか？
-      await context.server.playFromURL(commandMessage, message.attachments.first().url, morePrefs, t);
-    }else if(message.author.id === context.client.user.id){
+      await context.server.playFromUrl(commandMessage, message.attachments.first()!.url, morePrefs);
+      return;
+    }else if(message.author.id === context.client.user.id || config.isWhiteListedBot(message.author.id)){
       // ボットのメッセージなら
       // 埋め込みを取得
       const embed = message.embeds[0];
@@ -723,16 +827,17 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
           || embed.color === Util.color.getColor("NP")
       ){
         // 曲関連のメッセージならそれをキューに追加
-        const url = embed.description.match(/^\[.+\]\((?<url>https?.+)\)/)?.groups.url;
-        await context.server.playFromURL(commandMessage, url, morePrefs, t);
-      }else{
-        await commandMessage.reply(`:face_with_raised_eyebrow:${t("commands:play.noContent")}`)
-          .catch(this.logger.error);
+        const url = embed.description?.match(/^\[.+\]\((?<url>https?.+)\)/)?.groups!.url;
+
+        if(url){
+          await context.server.playFromUrl(commandMessage, url, morePrefs);
+          return;
+        }
       }
-    }else{
-      await commandMessage.reply(`:face_with_raised_eyebrow:${t("commands:play.noContent")}`)
-        .catch(this.logger.error);
     }
+
+    await commandMessage.reply(`:face_with_raised_eyebrow: ${t("commands:play.noContent")}`)
+      .catch(this.logger.error);
   }
 
   /**
@@ -740,13 +845,16 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * @param nums インデックス番号の配列
    * @param message 
    */
-  async playFromSearchPanelOptions(nums: string[], panel: SearchPanel, t: i18n["t"]){
+  async playFromSearchPanelOptions(nums: string[], panel: SearchPanel){
     const includingNums = panel.filterOnlyIncludes(nums.map(n => Number(n)).filter(n => !isNaN(n)));
+
     const {
       urls: items,
       responseMessage,
     } = panel.decideItems(includingNums);
+
     const [first, ...rest] = items;
+
     // いっこめをしょり
     await this.queue.addQueue({
       url: first,
@@ -754,15 +862,18 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
       fromSearch: responseMessage,
       cancellable: this.queue.length >= 1,
     });
+
     // 現在の状態を確認してVCに接続中なら接続試行
     if(panel.commandMessage.member.voiceState?.channelID){
-      await this.joinVoiceChannel(panel.commandMessage, {}, t);
+      await this.joinVoiceChannel(panel.commandMessage, {});
     }
+
     // 接続中なら再生を開始
     if(this.player.isConnecting && !this.player.isPlaying){
-      await this.player.play();
+      await this.player.play({ bgm: false });
     }
-    // 二個目以上を処理
+
+    // 二個目以降を処理
     for(let i = 0; i < rest.length; i++){
       await this.queue.addQueue({
         url: rest[i],
@@ -776,13 +887,13 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * プレフィックス更新します
    * @param message 更新元となるメッセージ
    */
-  updatePrefix(message: CommandMessage|Message<AnyGuildTextChannel>){
+  updatePrefix(message: CommandMessage|Message<AnyTextableGuildChannel>){
     const oldPrefix = this.prefix;
-    const member = message.guild.members.get(this.bot.client.user.id);
+    const member = message.guild.members.get(this.bot.client.user.id)!;
     const pmatch = (member.nick || member.username).match(/^(\[(?<prefix0>[a-zA-Z!?_-]+)\]|【(?<prefix1>[a-zA-Z!?_-]+)】)/);
     if(pmatch){
-      if(this.prefix !== (pmatch.groups.prefix0 || pmatch.groups.prefix1)){
-        this.prefix = Util.normalizeText(pmatch.groups.prefix0 || pmatch.groups.prefix1);
+      if(this.prefix !== (pmatch.groups!.prefix0 || pmatch.groups!.prefix1)){
+        this.prefix = Util.normalizeText(pmatch.groups!.prefix0 || pmatch.groups!.prefix1);
       }
     }else if(this.prefix !== config.prefix){
       this.prefix = config.prefix;
@@ -797,7 +908,7 @@ export class GuildDataContainer extends LogEmitter<GuildDataContainerEvents> {
    * @param message ベースとなるコマンドメッセージ
    */
   async createSkipSession(message: CommandMessage){
-    this._skipSession = new SkipManager(this);
+    this._skipSession = new SkipSession(this);
     await this._skipSession.init(message);
     const destroy = () => {
       this._skipSession?.destroy();

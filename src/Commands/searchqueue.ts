@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 import type { EmbedField } from "oceanic.js";
 
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
@@ -34,7 +33,7 @@ export default class Searchq extends BaseCommand {
       alias: ["searchqueue", "searchq", "seq", "sq"],
       unlist: false,
       category: "playlist",
-      argument: [{
+      args: [{
         type: "string",
         name: "keyword",
         required: true,
@@ -46,8 +45,9 @@ export default class Searchq extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
 
     if(context.server.queue.length === 0){
       message.reply(t("commands:searchqueue.queueEmpty")).catch(this.logger.error);
@@ -82,13 +82,15 @@ export default class Searchq extends BaseCommand {
         name: index === "0"
           ? `${t("components:nowplaying.nowplayingItemName")}/${t("components:nowplaying.waitForPlayingItemName")}`
           : index,
-        value: `[${c.basicInfo.title}](${c.basicInfo.url})\r\n`
-          + `${t("components:nowplaying.requestedBy")}: \`${c.additionalInfo.addedBy.displayName}\` \r\n`
-          + `${t("length")}: ${
+        value: [
+          c.basicInfo.isPrivateSource ? c.basicInfo.title : `[${c.basicInfo.title}](${c.basicInfo.url})`,
+          `${t("components:nowplaying.requestedBy")}: \`${c.additionalInfo.addedBy.displayName}\` `,
+          `${t("length")}: ${
             c.basicInfo.isYouTube() && c.basicInfo.isLiveStream
               ? `(${t("liveStream")})`
               : ` \`${_t === 0 ? `(${t("unknown")})` : `${min}:${sec}`}\`)`
           }`,
+        ].join("\r\n"),
         inline: false,
       } as EmbedField;
     });

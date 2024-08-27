@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -22,16 +22,7 @@ import type { DataType, MusicBotBase } from "../../botBase";
 import { isDeepStrictEqual } from "util";
 
 import { LogEmitter } from "../../Structure";
-
-export type exportableStatuses = {
-  voiceChannelId: string,
-  boundChannelId: string,
-  loopEnabled: boolean,
-  queueLoopEnabled: boolean,
-  addRelatedSongs: boolean,
-  equallyPlayback: boolean,
-  volume: number,
-};
+import { JSONStatuses } from "../../types/GuildStatuses";
 
 // eslint-disable-next-line @typescript-eslint/ban-types
 export abstract class Backupper extends LogEmitter<{}> {
@@ -48,11 +39,11 @@ export abstract class Backupper extends LogEmitter<{}> {
   /**
    * バックアップ済みの接続ステータス等を取得します
    */
-  abstract getStatusFromBackup(guildIds: string[]): Promise<Map<string, exportableStatuses>>;
+  abstract getStatusFromBackup(guildIds: string[]): Promise<Map<string, JSONStatuses> | null>;
   /**
    * バックアップ済みのキューのデータを取得します
    */
-  abstract getQueueDataFromBackup(guildIds: string[]): Promise<Map<string, YmxFormat>>;
+  abstract getQueueDataFromBackup(guildIds: string[]): Promise<Map<string, YmxFormat> | null>;
   /**
    * サーバーとの接続を破棄します
    */
@@ -90,7 +81,7 @@ export abstract class IntervalBackupper extends Backupper {
     await this.backupQueue();
   }
 
-  protected updateStatusCache(guildId: string, status: exportableStatuses){
+  protected updateStatusCache(guildId: string, status: JSONStatuses){
     this.previousStatusCache.set(guildId, JSON.stringify(status));
   }
 
@@ -112,7 +103,7 @@ export abstract class IntervalBackupper extends Backupper {
         if(!this.previousStatusCache.has(id)){
           return true;
         }else{
-          return !isDeepStrictEqual(this.data.get(id).exportStatus(), JSON.parse(this.previousStatusCache.get(id)));
+          return !isDeepStrictEqual(this.data.get(id)!.exportStatus(), JSON.parse(this.previousStatusCache.get(id)!));
         }
       });
   }

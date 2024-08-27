@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,17 +18,15 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
-
 import candyget from "candyget";
 import * as Genius from "genius-lyrics";
 import { decode } from "html-entities";
 import { convert } from "html-to-text";
 
 import { BaseCommand } from ".";
-import { discordUtil, color } from "../Util";
+import { color } from "../Util";
 import { DefaultAudioThumbnailURL } from "../definition";
 
 export default class Lyrics extends BaseCommand {
@@ -37,7 +35,7 @@ export default class Lyrics extends BaseCommand {
       alias: ["lyrics", "l", "lyric"],
       unlist: false,
       category: "utility",
-      argument: [
+      args: [
         {
           type: "string",
           name: "keyword",
@@ -51,11 +49,13 @@ export default class Lyrics extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, options: CommandArgs, t: i18n["t"]){
-    options.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     const msg = await message.reply("🔍検索中...");
     try{
-      const songInfo = await getLyrics(options.rawArgs);
+      const songInfo = await getLyrics.call(this, context.rawArgs);
       const embeds = [] as MessageEmbedBuilder[];
       if(!songInfo.lyric) throw new Error("取得した歌詞が空でした");
       const chunkLength = Math.ceil(songInfo.lyric.length / 4000);
@@ -74,7 +74,7 @@ export default class Lyrics extends BaseCommand {
       ;
       embeds[embeds.length - 1]
         .setFooter({
-          text: discordUtil.users.getDisplayName(message.member),
+          text: message.member.displayName,
           iconURL: message.member.avatarURL(),
         })
       ;
@@ -91,7 +91,7 @@ export default class Lyrics extends BaseCommand {
   }
 }
 
-async function getLyrics(keyword: string): Promise<songInfo>{
+async function getLyrics(this: BaseCommand, keyword: string): Promise<songInfo>{
   try{
     const client = new Genius.Client();
     const song = (await client.songs.search(keyword))[0];
@@ -106,6 +106,8 @@ async function getLyrics(keyword: string): Promise<songInfo>{
   catch(e){
     // Fallback to utaten
     if(!process.env.CSE_KEY) throw e;
+    this.logger.warn(e);
+
     const { body } = await candyget.json(
       `${
         Buffer.from("aHR0cHM6Ly9jdXN0b21zZWFyY2guZ29vZ2xlYXBpcy5jb20vY3VzdG9tc2VhcmNoL3YxP2N4PTg5ZWJjY2FjZGMzMjQ2MWYy", "base64").toString()
@@ -116,6 +118,7 @@ async function getLyrics(keyword: string): Promise<songInfo>{
     if(!items || items.length === 0){
       throw new Error("No lyric was found");
     }
+
     const url = items[0].link;
     let { body: lyric } = await candyget.string(url, {
       headers: {
@@ -133,13 +136,16 @@ async function getLyrics(keyword: string): Promise<songInfo>{
       .replace(/[\r\n]{2}/g, "<br>")
     ;
     lyric = convert(lyric);
-    const match = doc.match(/<meta name="description" content="(?<artist>.+?)が歌う(?<title>.+)の歌詞ページ.+です。.+">/);
-    const artwork = doc.match(/<img src="(?<url>.+?)" alt=".+? 歌詞" \/>/).groups?.url;
+
+    const structuredData = JSON.parse<any>(doc.match(/<script\stype="application\/ld\+json">(\r?\n?)\s*(?<json>.+)<\/script>/)!.groups!.json);
+    const artwork = doc.match(/<img src="(?<url>.+?)" alt=".+? 歌詞" \/>/)?.groups?.url;
+
+
     return {
       lyric: decode(lyric),
-      artist: decode(match.groups.artist),
-      title: decode(match.groups.title),
-      artwork: artwork.startsWith("http") ? artwork : DefaultAudioThumbnailURL,
+      artist: structuredData.recordedAs.byArtist.name,
+      title: structuredData.name,
+      artwork: artwork?.startsWith("http") ? artwork : DefaultAudioThumbnailURL,
       url: url,
     };
   }

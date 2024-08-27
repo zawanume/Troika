@@ -1,5 +1,7 @@
+#!/usr/bin/env node
+
 /*
- * Copyright 2021-2022 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -19,9 +21,23 @@
 // @ts-check
 const fs = require("fs");
 const path = require("path");
-const config = require("../dist/config").useConfig();
+const config = require("../dist/config").getConfig();
+
+let overview = `# コマンド一覧
+この節では、ボットで使用できるコマンドのほとんどが解説されています。
+
+:::info
+詳細な説明ではないため、各コマンドの使用法について疑問があれば、サポートまでお問い合わせください。
+:::
+
+<div class="no-wrap-table">
+
+|コマンド名|概要|
+|:--------|:---|
+`;
+
 require("../dist/i18n").initLocalization(false, config.defaultLanguage).then(() => {
-  const { CommandManager } = require("../dist/Component/CommandManager");
+  const { CommandManager } = require("../dist/Component/commandManager");
   // const { categories, categoriesList } = require("../dist/Commands/commands");
 
   const commandDocPath = path.join(__dirname, "../docs/docs/guide/commands/");
@@ -43,7 +59,7 @@ require("../dist/i18n").initLocalization(false, config.defaultLanguage).then(() 
 
   for(let i = 0; i < commands.length; i++){
     const cmd = commands[i];
-    const filename = `${cmd.asciiName}.md`;
+    const filename = `${cmd.asciiName.replaceAll(">", "_")}.md`;
     if(existingFiles.has(filename)){
       existingFiles.delete(filename);
     }
@@ -53,7 +69,7 @@ sidebar_label: ${cmd.name}
 # \`${cmd.name}\`コマンド
 ${cmd.description}
 
-スラッシュコマンドでは、\`/${cmd.asciiName.replace(/_/g, " ")}\`を使用してください。
+スラッシュコマンドでは、\`/${cmd.asciiName.replaceAll(">", " ")}\`を使用してください。
 
 ## 別名
 \`${cmd.name}\`以外にも以下の別名を使用できます。
@@ -67,8 +83,13 @@ ${cmd.examples ? `## 使用例\r\n\`\`\`\r\n${cmd.examples[config.defaultLanguag
 ${cmd.getLocalizedPermissionDescription(config.defaultLanguage)}
 
 ※管理者権限や、サーバーの管理権限、チャンネルの管理権限、および管理者権限を持つユーザーはこの権限を満たしていなくてもいつでもこのコマンドを実行できます。
-  \r\n`, {encoding: "utf-8"});
+\r\n`, {encoding: "utf-8"});
+
+    overview += `|[${cmd.name}](./${cmd.asciiName.replaceAll(">", "_")}.md)|${cmd.description.replace(/\n/g, "")}|\r\n`
   }
+
+  overview += "\r\n\r\n</div>";
+  fs.writeFileSync(path.join(commandDocPath, "overview.md"), overview, { encoding: "utf-8" });
 
   existingFiles.forEach(file => fs.unlinkSync(path.join(commandDocPath, file)));
 

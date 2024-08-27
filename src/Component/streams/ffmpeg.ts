@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -17,6 +17,7 @@
  */
 
 import type { StreamInfo } from "../../AudioSource";
+import type { ExportedAudioEffect } from "../audioEffectManager";
 
 import { FFmpeg } from "prism-media";
 
@@ -38,12 +39,12 @@ export function transformThroughFFmpeg(
   readable: StreamInfo,
   {
     bitrate,
-    effectArgs,
+    effects,
     seek,
     output,
   }: {
     bitrate: number,
-    effectArgs: string[],
+    effects: ExportedAudioEffect,
     seek: number,
     output: "webm"|"ogg"|"pcm",
   }
@@ -52,53 +53,58 @@ export function transformThroughFFmpeg(
     ...FFmpegDefaultNetworkArgs,
     "-user_agent", readable.userAgent || DefaultUserAgent,
   ] : [];
+  const ffmpegCookieArgs = readable.type === "url" && readable.cookie ? [
+    "-cookies", readable.cookie,
+  ] : [];
   const ffmpegSeekArgs = seek > 0 ? [
     "-ss", seek.toString(),
   ] : [];
   const outputArgs: string[] = [];
   const bitrateArgs: string[] = [];
+
   if(
-    effectArgs.length === 0
+    effects.args.length === 0
     && ((output === "webm" && readable.streamType === "webm/opus") || (output === "ogg" && readable.streamType === "ogg/opus"))
   ){
     outputArgs.push(
       "-f", output === "ogg" ? "opus" : "webm",
       "-acodec", "copy",
     );
+  }else if(output === "ogg" || output === "webm"){
+    outputArgs.push(
+      "-f", output === "ogg" ? "opus" : "webm",
+      "-acodec", "libopus",
+    );
   }else{
-    if(output === "ogg" || output === "webm"){
-      outputArgs.push(
-        "-f", output === "ogg" ? "opus" : "webm",
-        "-acodec", "libopus",
-      );
-    }else{
-      outputArgs.push(
-        "-f",
-        "s16le",
-      );
-    }
-    if(effectArgs.length !== 2 || !effectArgs[1].includes("loudnorm")){
-      bitrateArgs.push(
-        "-vbr", "on",
-        "-b:a", bitrate.toString(),
-        "-ar", "48000",
-        "-ac", "2",
-      );
-    }
+    outputArgs.push(
+      "-f", "s16le",
+      "-ar", "48000",
+      "-ac", "2",
+    );
   }
+
+  if(!effects.shouldDisableVbr){
+    bitrateArgs.push(
+      "-vbr", "on",
+    );
+  }
+
+  bitrateArgs.push("-b:a", bitrate.toString());
+
   const args = [
     "-analyzeduration", "0",
     ...ffmpegNetworkArgs,
     ...ffmpegSeekArgs,
+    ...ffmpegCookieArgs,
     "-i", readable.type === "readable" ? "-" : readable.url,
-    ...effectArgs,
+    ...effects.args,
     "-vn",
     ...outputArgs,
     ...bitrateArgs,
   ];
   logger.debug("Passing arguments: " + args.map(arg => arg.startsWith("http") ? "<URL>" : arg).join(" "));
   const ffmpeg = new FFmpeg({ args });
-  ffmpeg.process.stderr.on("data", chunk => logger.debug(chunk.toString()));
+  ffmpeg.process.stderr?.on("data", chunk => logger.debug(chunk.toString()));
   ffmpeg.process.once("exit", (code, signal) => {
     logger.debug(`FFmpeg process exited (code: ${code}, signal: ${signal})`);
     ffmpeg.emit("close");

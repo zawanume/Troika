@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -24,19 +24,18 @@ import type * as discord from "oceanic.js";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import util from "util";
 
-import { RateLimitController } from "./Component/RateLimitController";
-import { SourceCache } from "./Component/SourceCache";
 import { HttpBackupper } from "./Component/backupper/httpBased";
 import { MongoBackupper } from "./Component/backupper/mongodb";
 import { ReplitBackupper } from "./Component/backupper/replit";
 import { InteractionCollectorManager } from "./Component/collectors/InteractionCollectorManager";
+import { RateLimitController } from "./Component/rateLimitController";
+import { SourceCache } from "./Component/sourceCache";
 import { GuildDataContainer } from "./Structure";
 import { LogEmitter } from "./Structure";
 import { GuildDataContainerWithBgm } from "./Structure/GuildDataContainerWithBgm";
 import * as Util from "./Util";
-import { useConfig } from "./config";
+import { getConfig } from "./config";
 
 export type DataType = Map<string, GuildDataContainer>;
 
@@ -58,13 +57,13 @@ interface BotBaseEvents {
 export abstract class MusicBotBase extends LogEmitter<BotBaseEvents> {
   // クライアントの初期化
   protected readonly abstract _client: discord.Client;
-  protected readonly _instantiatedTime: Date = null;
-  protected readonly _versionInfo: string = null;
+  protected readonly _instantiatedTime: Date | null = null;
+  protected readonly _versionInfo: string;
   protected readonly _rateLimitController = new RateLimitController();
   protected readonly guildData: DataType = new Map();
   protected readonly _interactionCollectorManager: InteractionCollectorManager = new InteractionCollectorManager();
-  protected readonly _cacheManger: SourceCache = null;
-  protected _backupper: Backupper = null;
+  protected readonly _cacheManger: SourceCache;
+  protected _backupper: Backupper | null = null;
   private maintenanceTickCount = 0;
 
   /**
@@ -176,7 +175,7 @@ export abstract class MusicBotBase extends LogEmitter<BotBaseEvents> {
     }
     this.logger.info(`Version: ${this._versionInfo}`);
     this.initializeBackupper();
-    const config = useConfig();
+    const config = getConfig();
     this._cacheManger = new SourceCache(this, config.cacheLevel === "persistent");
   }
 
@@ -222,9 +221,6 @@ export abstract class MusicBotBase extends LogEmitter<BotBaseEvents> {
     this.logger.info(
       `[Tick] (System) Memory RSS: ${rss}MB, Heap total: ${Util.system.getMBytes(nMem.heapTotal)}MB, Total: ${Util.getPercentage(rss + ext, memory.total)}%`
     );
-
-    // for debug purpose
-    this.logger.trace("ratelimits", util.inspect(this.client.rest.handler.ratelimits, { showHidden: true, depth: Infinity }));
   }
 
   abstract run(debugLog: boolean, debugLogStoreLength?: number): void;
@@ -232,10 +228,13 @@ export abstract class MusicBotBase extends LogEmitter<BotBaseEvents> {
   /**
    * 必要に応じてサーバーデータを初期化します
    */
-  protected initData(guildid: string, boundChannelId: string){
+  protected upsertData(guildid: string, boundChannelId: string){
     const prev = this.guildData.get(guildid);
     if(!prev){
-      const server = new GuildDataContainer(guildid, boundChannelId, this);
+      const config = getConfig();
+      const server = config.bgm[guildid]
+        ? new GuildDataContainerWithBgm(guildid, boundChannelId, this, config.bgm[guildid])
+        : new GuildDataContainer(guildid, boundChannelId, this);
       this.guildData.set(guildid, server);
       this.emit("guildDataAdded", server);
       return server;

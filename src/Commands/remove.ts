@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { BaseCommand } from ".";
 import { discordUtil } from "../Util";
@@ -29,7 +28,7 @@ export default class Rm extends BaseCommand {
       alias: ["消去", "remove", "rm", "del", "delete"],
       unlist: false,
       category: "playlist",
-      argument: [{
+      args: [{
         type: "string",
         name: "index",
         required: true,
@@ -41,7 +40,8 @@ export default class Rm extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
     if(context.args.length === 0){
       message.reply(t("commands:remove.noArgument")).catch(this.logger.error);
       return;
@@ -61,8 +61,8 @@ export default class Rm extends BaseCommand {
     context.args.forEach(o => {
       let match = o.match(/^(?<from>[0-9]+)-(?<to>[0-9]+)$/);
       if(match){
-        const from = Number(match.groups.from);
-        const to = Number(match.groups.to);
+        const from = Number(match.groups!.from);
+        const to = Number(match.groups!.to);
         if(!isNaN(from) && !isNaN(to) && from <= to){
           for(let i = from; i <= to; i++){
             addition.push(i);
@@ -71,7 +71,7 @@ export default class Rm extends BaseCommand {
       }else{
         match = o.match(/^(?<from>[0-9]+)-$/);
         if(match){
-          const from = Number(match.groups.from);
+          const from = Number(match.groups!.from);
           if(!isNaN(from)){
             for(let i = from; i < q.length; i++){
               addition.push(i);
@@ -80,7 +80,7 @@ export default class Rm extends BaseCommand {
         }else{
           match = o.match(/^-(?<to>[0-9]+)$/);
           if(match){
-            const to = Number(match.groups.to);
+            const to = Number(match.groups!.to);
             if(!isNaN(to)){
               for(let i = context.server.player.isPlaying ? 1 : 0; i <= to; i++){
                 addition.push(i);
@@ -113,7 +113,7 @@ export default class Rm extends BaseCommand {
       if(
         discordUtil.users.isDJ(message.member, context)
         || item.additionalInfo.addedBy.userId === message.member.id
-        || !discordUtil.channels.getVoiceMember(context).has(item.additionalInfo.addedBy.userId)
+        || !discordUtil.channels.getVoiceMember(context)?.has(item.additionalInfo.addedBy.userId)
         || discordUtil.channels.isOnlyListener(message.member, context)
         || discordUtil.users.isPrivileged(message.member)
       ){

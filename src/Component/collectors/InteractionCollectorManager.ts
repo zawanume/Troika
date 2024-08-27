@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,7 +16,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { AnyGuildTextChannel, ComponentInteraction } from "oceanic.js";
+import type { AnyTextableGuildChannel, ComponentInteraction } from "oceanic.js";
 
 import { InteractionCollector } from "./InteractionCollector";
 import { Pagenation } from "./Pagenation";
@@ -71,12 +71,18 @@ export class InteractionCollectorManager extends LogEmitter<InteractionCollector
     return collector;
   }
 
-  interactionCreate(interaction: ComponentInteraction<any, AnyGuildTextChannel>){
+  /**
+   * インタラクションを受信し、対応するコレクターに処理を渡します。
+   * @param interaction インタラクション
+   * @returns 対応するコレクターが存在し、処理が渡った場合はtrue、それ以外の場合はfalse
+   */
+  async onInteractionCreate(interaction: ComponentInteraction<any, AnyTextableGuildChannel>){
     const collector = this.collectors.get(interaction.data.customID);
     if(!collector){
       return false;
     }else{
       this.logger.debug(`passed an interaction successfully: ${interaction.data.customID} => ${collector.collectorId}`);
+      await interaction.deferUpdate();
       collector.handleInteraction(interaction);
       return true;
     }

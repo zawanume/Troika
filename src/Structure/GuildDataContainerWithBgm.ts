@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -22,8 +22,8 @@ import type { GuildBGMContainerType } from "../config";
 import i18next from "i18next";
 
 import { GuildDataContainer } from "./GuildDataContainer";
-import { PlayManagerWithBgm } from "../Component/PlayManagerWithBgm";
-import { QueueManagerWithBgm } from "../Component/QueueManagerWithBGM";
+import { PlayManagerWithBgm } from "../Component/playManagerWithBgm";
+import { QueueManagerWithBgm } from "../Component/queueManagerWithBGM";
 
 export class GuildDataContainerWithBgm extends GuildDataContainer {
   protected override _queue: QueueManagerWithBgm;
@@ -86,7 +86,7 @@ export class GuildDataContainerWithBgm extends GuildDataContainer {
       this.queue.resetBgmTracks();
     }
     return this.joinVoiceChannelOnly(this.bgmConfig.voiceChannelId)
-      .then(() => this.player.play(0, /* BGM */ true))
+      .then(() => this.player.play({ quiet: true, bgm: true }))
       .catch(this.logger.error);
   }
 }

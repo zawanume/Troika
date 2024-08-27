@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
@@ -32,8 +31,8 @@ export default class Queue extends BaseCommand {
       alias: ["キューを表示", "再生待ち", "queue", "q"],
       unlist: false,
       category: "playlist",
-      argument: [{
-        type: "integer",
+      args: [{
+        type: "integer" as const,
         name: "page",
         required: false,
       }],
@@ -42,8 +41,9 @@ export default class Queue extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
     const queue = context.server.queue;
     if(queue.length === 0){
       await message.reply(`:face_with_raised_eyebrow:${t("commands:queue.queueEmpty")}`).catch(this.logger.error);
@@ -77,14 +77,14 @@ export default class Queue extends BaseCommand {
               ? t("components:nowplaying.nowplayingItemName")
               : t("components:nowplaying.waitForPlayingItemName"),
           value: [
-            `[${q.basicInfo.title}](${q.basicInfo.url})`,
+            q.basicInfo.isPrivateSource ? q.basicInfo.title : `[${q.basicInfo.title}](${q.basicInfo.url})`,
             `${t("length")}: \`${
               q.basicInfo.isYouTube() && q.basicInfo.isLiveStream
                 ? t("commands:log.liveStream")
                 : `${min}:${sec}`
             } \``,
             `${t("components:nowplaying.requestedBy")}: \`${q.additionalInfo.addedBy.displayName}\` `,
-            q.basicInfo.npAdditional(t),
+            q.basicInfo.npAdditional(),
           ].join("\r\n"),
         });
       }
@@ -103,11 +103,11 @@ export default class Queue extends BaseCommand {
             `${t("commands:queue.total")}: ${thour}:${tmin}:${tsec}`,
             `${t("components:queue.trackloop")}:${queue.loopEnabled ? "⭕" : "❌"}`,
             `${t("components:queue.queueloop")}:${queue.queueLoopEnabled ? "⭕" : "❌"}`,
-            `${t("components:queue.autoplayRelated")}:${context.server.addRelated ? "⭕" : "❌"}`,
-            `${t("components:queue.equallyplayback")}:${context.server.equallyPlayback ? "⭕" : "❌"}`,
+            `${t("components:queue.autoplayRelated")}:${context.server.preferences.addRelated ? "⭕" : "❌"}`,
+            `${t("components:queue.equallyplayback")}:${context.server.preferences.equallyPlayback ? "⭕" : "❌"}`,
           ].join(" | "),
         })
-        .setThumbnail(message.guild.iconURL())
+        .setThumbnail(message.guild.iconURL()!)
         .setColor(getColor("QUEUE"))
         .toOceanic()
       ;

@@ -13,47 +13,68 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
+    open-pull-requests-limit: 20
     allow:
       - dependency-type: "direct"
     ignore:
-      - dependency-name: "sodium-native"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "p-queue"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "p-event"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: "sodium-native" # oceanic.js requirements
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "p-queue" # uses ES-modules
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "p-event" # uses ES-modules
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "undici" # dropping support Node.js v16
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "genius-lyrics" # uses undici for Node.js v18+
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "soundcloud.ts" # uses undici for Node.js v18+
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "rimraf" # dropping support Node.js v16, v18
+        update-types:
+          - "version-update:semver-major"
 
-  # v3 branch
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "09:00"
-      timezone: "Asia/Tokyo"
-    commit-message:
-      prefix: "Update:"
-    target-branch: "v3"
-    labels:
-      - "dependencies"
-      - "javascript"
-      - "target:v3"
-    allow:
-      - dependency-type: "direct"
-    ignore:
-      - dependency-name: "html-to-text"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "pako"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "sodium-native"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "rimraf"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "mongodb"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "p-queue"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "p-event"
-        update-types: ["version-update:semver-major"]
+    groups:
+      oceanic:
+        patterns:
+          - "oceanic.js"
+          - "@mtripg6666tdr/oceanic-command-resolver"
+
+  # v1-lts branch
+  # - package-ecosystem: npm
+  #   directory: "/"
+  #   schedule:
+  #     interval: "daily"
+  #     time: "09:00"
+  #     timezone: "Asia/Tokyo"
+  #   commit-message:
+  #     prefix: "Update:"
+  #   target-branch: "v1-lts-lol"
+  #   labels:
+  #     - "dependencies"
+  #     - "javascript"
+  #     - "target:v1"
+  #   allow:
+  #     - dependency-type: "direct"
+  #   ignore:
+  #     - dependency-name: "discord.js"
+  #       update-types:
+  #         - "version-update:semver-major"
+  #     - dependency-name: "soundcloud.ts"
+  #       update-types:
+  #         - "version-update:semver-major"
+  #     - dependency-name: "https-proxy-agent"
+  #       update-types:
+  #         - "version-update:semver-major"
 
   # documentation site (master)
   - package-ecosystem: npm
@@ -64,7 +85,7 @@ updates:
       timezone: "Asia/Tokyo"
     commit-message:
       prefix: "Update(docs):"
-    target-branch: "v3"
+    target-branch: "master"
     labels:
       - "dependencies"
       - "javascript"
@@ -73,11 +94,21 @@ updates:
       - dependency-type: "direct"
     ignore:
       - dependency-name: "@mdx-js/react"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          - "version-update:semver-major"
       - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          - "version-update:semver-major"
       - dependency-name: "react-dom"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "prism-react-renderer"
+        update-types:
+          - "version-update:semver-major"
+    groups:
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
 
   # actions (master)
   - package-ecosystem: github-actions
@@ -89,20 +120,6 @@ updates:
     commit-message:
       prefix: "Update(action):"
     target-branch: "master"
-    labels:
-      - "dependencies"
-      - "github_actions"
-
-  # actions (v3)
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "09:00"
-      timezone: "Asia/Tokyo"
-    commit-message:
-      prefix: "Update(action):"
-    target-branch: "v3"
     labels:
       - "dependencies"
       - "github_actions"

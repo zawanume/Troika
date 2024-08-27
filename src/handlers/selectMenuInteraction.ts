@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -21,7 +21,6 @@ import type { MusicBot } from "../bot";
 import type * as discord from "oceanic.js";
 import type { ComponentTypes } from "oceanic.js";
 
-import i18next from "i18next";
 
 export async function handleSelectMenuInteraction(
   this: MusicBot,
@@ -31,12 +30,12 @@ export async function handleSelectMenuInteraction(
   if(!interaction.inCachedGuildChannel()) return;
   this.logger.info("received selectmenu interaction");
 
-  if(this.collectors.interactionCreate(interaction)){
+  if(await this.collectors.onInteractionCreate(interaction)){
     return;
   }
 
   // 検索パネル取得
-  const panel = this.guildData.get(interaction.channel.guild.id).searchPanel.get(interaction.member.id);
+  const panel = this.guildData.get(interaction.channel.guild.id)?.searchPanel.get(interaction.member.id);
 
   // なければ返却
   if(!panel) return;
@@ -46,7 +45,7 @@ export async function handleSelectMenuInteraction(
     if(interaction.data.values.getStrings().includes("cancel")){
       await panel.destroy();
     }else{
-      await server.playFromSearchPanelOptions(interaction.data.values.getStrings(), panel, i18next.getFixedT(interaction.locale));
+      await server.playFromSearchPanelOptions(interaction.data.values.getStrings(), panel);
     }
   }
 }

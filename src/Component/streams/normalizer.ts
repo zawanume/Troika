@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -20,6 +20,7 @@ import type { ReadableOptions } from "stream";
 
 import { Readable } from "stream";
 
+import { bindThis } from "../../Util/decorators";
 import { getLogger } from "../../logger";
 
 export class Normalizer extends Readable {
@@ -34,6 +35,7 @@ export class Normalizer extends Readable {
 
     this.resumeHighWaterMark = this.readableHighWaterMark * 0.6;
 
+    const now = Date.now();
     setImmediate(() => {
       if(this.origin){
         this.on("data", () => {
@@ -48,12 +50,14 @@ export class Normalizer extends Readable {
             this.pauseOrigin();
           }
         });
+        this.origin.once("data", chunk => {
+          this.logger.debug(`first chunk received; elapsed ${Date.now() - now}ms / ${chunk.length} bytes`);
+        });
       }
     }).unref();
     this.origin.once("end", () => this.push(null));
     this.origin.on("error", er => this.destroy(er));
 
-    this._onDestroy = this._onDestroy.bind(this);
     this.once("close", this._onDestroy);
     this.once("end", this._onDestroy);
 
@@ -80,6 +84,7 @@ export class Normalizer extends Readable {
     }
   }
 
+  @bindThis
   protected _onDestroy(){
     if(this._destroyed){
       return;
@@ -93,12 +98,14 @@ export class Normalizer extends Readable {
       if(!this.origin.destroyed){
         this.origin.destroy();
       }
-      this.origin = null;
+      this.origin = null!;
       try{
-        // @ts-expect-error 2339
-        this._readableState?.buffer.clear();
-        // @ts-expect-error 2339
-        this._readableState?.length = 0;
+        if("_readableState" in this){
+          // @ts-expect-error 2339
+          this._readableState.buffer.clear();
+          // @ts-expect-error 2339
+          this._readableState.length = 0;
+        }
       }
       catch{/* empty */}
     }

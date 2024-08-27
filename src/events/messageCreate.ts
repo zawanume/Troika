@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -21,20 +21,24 @@ import type { MusicBot } from "../bot";
 import i18next from "i18next";
 import * as discord from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { CommandMessage } from "../Component/commandResolver/CommandMessage";
 import { GuildDataContainerWithBgm } from "../Structure/GuildDataContainerWithBgm";
 import { discordUtil, normalizeText } from "../Util";
-import { useConfig } from "../config";
+import { getConfig } from "../config";
 
-const config = useConfig();
+const config = getConfig();
 
 export async function onMessageCreate(this: MusicBot, message: discord.Message){
-  if(this.maintenance){
-    if(!config.isBotAdmin(message.author.id)) return;
+  if(this.maintenance && !config.isBotAdmin(message.author.id)){
+    return;
   }
-  // botのメッセやdm、およびnewsは無視
-  if(!this["_isReadyFinished"] || message.author.bot) return;
+
+
+  if(!this["_isReadyFinished"] || message.author.bot || !message.channel || !message.member || !message.inCachedGuildChannel()){
+    return;
+  }
+
   if(
     message.channel.type !== discord.ChannelTypes.GUILD_TEXT
     && message.channel.type !== discord.ChannelTypes.PRIVATE_THREAD
@@ -44,12 +48,20 @@ export async function onMessageCreate(this: MusicBot, message: discord.Message){
   ){
     return;
   }
-  if(this._rateLimitController.isRateLimited(message.member.id)) return;
+
+  if(this._rateLimitController.isLimited(message.member.id)){
+    return;
+  }
+
   // データ初期化
-  const server = this.initData(message.guildID, message.channel.id);
+  const server = this.upsertData(message.guildID, message.channel.id);
   // プレフィックスの更新
   server.updatePrefix(message as discord.Message<discord.TextChannel>);
-  if(message.content === `<@${this._client.user.id}>`){
+  if(message.content === this.mentionText){
+    if(this._rateLimitController.pushEvent(message.member.id)){
+      return;
+    }
+
     // メンションならば
     await message.channel.createMessage({
       content: `${i18next.t("mentionHelp", { lng: server.locale })}\r\n`
@@ -62,9 +74,14 @@ export async function onMessageCreate(this: MusicBot, message: discord.Message){
       .catch(this.logger.error);
     return;
   }
+
   const prefix = server.prefix;
   const messageContent = normalizeText(message.content);
   if(messageContent.startsWith(prefix) && messageContent.length > prefix.length){
+    if(this._rateLimitController.pushEvent(message.member.id)){
+      return;
+    }
+
     // コマンドメッセージを作成
     const commandMessage = CommandMessage.createFromMessage(message as discord.Message<discord.TextChannel>, prefix.length);
     // コマンドを解決
@@ -117,7 +134,7 @@ export async function onMessageCreate(this: MusicBot, message: discord.Message){
     );
   }else if(server.searchPanel.has(message.member.id)){
     // searchコマンドのキャンセルを捕捉
-    const panel = server.searchPanel.get(message.member.id);
+    const panel = server.searchPanel.get(message.member.id)!;
     const content = normalizeText(message.content);
     if(
       message.content === "キャンセル"
@@ -130,7 +147,7 @@ export async function onMessageCreate(this: MusicBot, message: discord.Message){
     else if(content.match(/^([0-9]\s?)+$/)){
       // メッセージ送信者が検索者と一致するかを確認
       const nums = content.split(" ");
-      await server.playFromSearchPanelOptions(nums, panel, i18next.getFixedT(server.locale));
+      await server.playFromSearchPanelOptions(nums, panel);
     }
   }else if(
     message.content === "キャンセル"

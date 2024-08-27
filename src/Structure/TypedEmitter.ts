@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -31,11 +31,12 @@ interface TypedEventEmitter<T extends EventDictionary> extends EventEmitter {
   once<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   prependListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   prependOnceListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
-  removeAllListeners(event: keyof T): this;
+  removeAllListeners(event?: keyof T): this;
   removeListener<U extends keyof T>(event: U, listener: (...args: T[U]) => void): this;
   rawListeners<U extends keyof T>(event: U): ((...args: T[U]) => void)[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 class TypedEventEmitter<T extends EventDictionary> extends EventEmitter {
   eitherOnce(events: (keyof T)[], listener: () => void){
     const handler = () => {

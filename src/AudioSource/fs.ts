@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,40 +16,41 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { exportableCustom } from ".";
-import type { ReadableStreamInfo } from "./audiosource";
-import type { i18n } from "i18next";
+import type { AudioSourceBasicJsonFormat, ReadableStreamInfo } from "./audiosource";
 
 import * as fs from "fs";
 import * as path from "path";
 
 import { AudioSource } from "./audiosource";
-import { retriveLengthSeconds } from "../Util";
+import { getCommandExecutionContext } from "../Commands";
+import { retrieveRemoteAudioInfo } from "../Util";
 
-export class FsStream extends AudioSource<string> {
+export class FsStream extends AudioSource<string, AudioSourceBasicJsonFormat> {
   constructor(){
-    super("fs");
+    super({ isCacheable: false });
   }
 
-  async init(url: string, _: exportableCustom, t: i18n["t"]){
+  async init(url: string, _: AudioSourceBasicJsonFormat | null){
+    const { t } = getCommandExecutionContext();
+    
     this.url = url;
-    this.title = t("audioSources.customStream");
-    try{
-      this.lengthSeconds = await retriveLengthSeconds(url);
-    }
-    catch{ /* empty */ }
+    const info = await retrieveRemoteAudioInfo(url);
+    this.title = info.displayTitle || t("audioSources.customStream");
+    this.lengthSeconds = info.lengthSeconds || 0;
     return this;
   }
 
   async fetch(): Promise<ReadableStreamInfo>{
     return {
       type: "readable",
-      stream: fs.createReadStream(path.join(__dirname, "../../", this.url)),
+      stream: fs.createReadStream(path.join(__dirname, global.BUNDLED ? "../" : "../../", this.url)),
       streamType: "unknown",
     };
   }
 
-  toField(_: boolean, t: i18n["t"]){
+  toField(_: boolean){
+    const { t } = getCommandExecutionContext();
+
     return [
       {
         name: `:asterisk:${t("moreInfo")}`,
@@ -62,7 +63,7 @@ export class FsStream extends AudioSource<string> {
     return "";
   }
 
-  exportData(): exportableCustom{
+  exportData(): AudioSourceBasicJsonFormat {
     return {
       url: this.url,
       length: this.lengthSeconds,

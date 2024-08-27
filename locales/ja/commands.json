@@ -4,20 +4,53 @@
     "description": "開発者が勝手に作った勉強用・作業用BGMのプリセットプレイリストを表示し、聞きたいものを選択して再生することができます。",
     "listOfPresetBGM": "プリセットBGM一覧"
   },
-  "bulk-delete": {
+  "bulk_delete": {
+    "name": "バルク削除",
+    "usage": "バルク削除 <メッセージ数>",
+    "examples": "バルク削除 10",
+    "description": "ボットが送信したメッセージを一括削除します。過去1000件のメッセージを遡って検索します。",
     "invalidMessageCount": "指定されたメッセージ数が無効です。",
-    "loading": "取得中",
-    "hitCount_one": "{{count}}件ヒット",
-    "hitCount_other": "{{count}}件ヒット",
-    "inCount_one": "取得した{{count}}件中",
-    "inCount_other": "取得した{{count}}件中",
     "found_one": "{{count}}件見つかりました。",
+    "inCount_other": "取得した{{count}}件中",
+    "inCount_one": "取得した{{count}}件中",
     "found_other": "{{count}}件見つかりました。",
-    "confirm": "一括削除を確定するにはボタンを押してください。\r\n押されないと一定時間後にキャンセルされます。",
+    "confirm": "一括削除を確定するにはボタンを押してください。\n押されないと一定時間後にキャンセルされます。",
     "auditLog_one": "{{issuer}}により{{count}}件のメッセージの削除が要求されたため。",
     "auditLog_other": "{{issuer}}により{{count}}件のメッセージの削除が要求されたため。",
     "finish": "完了!(このメッセージは自動的に消去されます)",
-    "cancel": "削除をキャンセルしました"
+    "cancel": "削除をキャンセルしました",
+    "hitCount_other": "{{count}}件ヒット",
+    "hitCount_one": "{{count}}件ヒット",
+    "loading": "取得中",
+    "args": {
+      "count": {
+        "description": "削除するメッセージの上限数。100以下で設定してください。"
+      }
+    }
+  },
+  "bulk_play": {
+    "name": "バルク再生",
+    "usage": "バルク再生 <URLまたはキーワード> <URLまたはキーワード> ...",
+    "examples": "バルク再生 曲A 曲B 曲C",
+    "description": "いくつかの曲を一括でキューに追加します。",
+    "args": {
+      "keyword1": {
+        "description": "追加する曲のキーワードまたはURL。"
+      },
+      "keyword2": {
+        "description": "追加する曲のキーワードまたはURL。"
+      },
+      "keyword3": {
+        "description": "追加する曲のキーワードまたはURL。"
+      },
+      "keyword4": {
+        "description": "追加する曲のキーワードまたはURL。"
+      },
+      "keyword5": {
+        "description": "追加する曲のキーワードまたはURL。"
+      }
+    },
+    "partialSuccess": "一部の曲が見つかりませんでした。"
   },
   "cancel": {
     "name": "キャンセル",
@@ -40,7 +73,8 @@
       "player": "音楽プレイヤー制御系",
       "playlist": "プレイリスト操作系",
       "utility": "ユーティリティ系",
-      "bot": "ボット操作全般"
+      "bot": "ボット操作全般",
+      "settings": "設定"
     },
     "commandList": "コマンド一覧",
     "toLearnMoreMessage": "`{{prefix}}コマンド 再生`のように、コマンド名を引数につけて、そのコマンドの詳細を表示できます。",
@@ -70,6 +104,13 @@
     "description": "現在再生中の曲(再生待ちの曲)をのぞいてほかの曲をすべて削除します。",
     "queueWasEmpty": "キューが空、もしくは一曲しかないため削除されませんでした。",
     "success": "キューに残された曲を削除しました。"
+  },
+  "equalplayback": {
+    "name": "均等再生",
+    "description": "追加ユーザーごとにキュー内の楽曲を均等に再生します。",
+    "enabled": "均等再生をオンにしました",
+    "disabled": "均等再生をオフにしました",
+    "featureDescription": "楽曲追加時に、楽曲を追加したユーザーごとにできるだけ均等になるようにする機能です。"
   },
   "export": {
     "name": "エクスポート",
@@ -221,6 +262,18 @@
     "disabled": "トラックリピートを無効にしました",
     "enabled": "トラックリピートを有効にしました"
   },
+  "looponce": {
+    "name": "ワンスループ",
+    "description": "現在再生中の再生が終了後、もう一度だけ同じ曲をループ再生します。",
+    "disabled": "ワンスループを無効にしました",
+    "enabled": "ワンスループを有効にしました"
+  },
+  "loopqueue": {
+    "disabled": "キューループを無効にしました。",
+    "enabled": "キューループを有効にしました。",
+    "name": "キューループ",
+    "description": "キュー内のループを設定します。"
+  },
   "lyrics": {
     "name": "歌詞",
     "description": "指定された楽曲の歌詞を検索します。",
@@ -308,6 +361,12 @@
     "alreadyPlaying": "すでに再生中です。",
     "queueEmpty": "キューが空です。再生するコンテンツがありません。"
   },
+  "play_private": {
+    "description": "URLを非公開のまま音楽をキューの末尾に追加し、状況に応じて再生を開始します。",
+    "noInteraction": "このコマンドをメッセージから実行することはできません",
+    "modalTitle": "再生したいURLを入力",
+    "inputLabel": "再生したいURL"
+  },
   "queue": {
     "name": "キュー",
     "description": "キューを表示します",
@@ -321,6 +380,21 @@
     "songCount_one": "{{count}}曲",
     "songCount_other": "{{count}}曲",
     "total": "合計"
+  },
+  "radio": {
+    "name": "ラジオ",
+    "description": "指定されたYouTubeのURLの楽曲からラジオ（ミックスリスト）の再生を開始または停止します。何も指定しないと現在再生中の楽曲からラジオを開始します。",
+    "args": {
+      "url": {
+        "description": "ラジオのもととなる楽曲のYouTubeのURL"
+      }
+    },
+    "alreadyEnabled": "すでに有効になっています。別の曲のラジオを開始するには、現在再生されているミックスをいったんオフにする必要があります。",
+    "noUrlSpecified": "もととなる楽曲のURLをひとつ指定してください。",
+    "invalidUrl": "指定されたURLは有効なYouTubeのURLではありません。",
+    "started": "指定された楽曲でラジオを開始しました。",
+    "startedFromCurrentSong": "現在再生中の楽曲でラジオを開始しました。",
+    "stopped": "ラジオを終了しました。"
   },
   "related": {
     "name": "関連動画",
@@ -388,6 +462,18 @@
     },
     "noArgument": "引数を指定してください。"
   },
+  "searchnico": {
+    "name": "ニコニコ動画を検索",
+    "description": "曲をニコニコ動画で検索します。",
+    "examples": "ニコニコを検索 セツナトリップ",
+    "usage": "ニコニコを検索 <キーワード>",
+    "args": {
+      "keyword": {
+        "description": "検索したい動画のキーワードまたはURL。"
+      }
+    },
+    "noArgument": "引数を指定してください。"
+  },
   "searchqueue": {
     "name": "キュー内を検索",
     "description": "キュー内を検索します。引数にキーワードを指定します。",
@@ -428,6 +514,38 @@
     "success": "シークしました",
     "failed": "シークに失敗しました"
   },
+  "setting": {
+    "name": "設定",
+    "description": "ボットの設定を変更します。"
+  },
+  "setting>skipvote": {
+    "name": "設定>スキップ投票",
+    "description": "スキップ投票の有効・無効の設定をします。何も指定しないと現在の設定を確認できます。",
+    "args": {
+      "enabled": {
+        "description": "スキップ投票を有効にするかどうか。"
+      }
+    },
+    "currentState": "スキップ投票は現在 **{{status}}** の設定になっています。",
+    "changed": "スキップ投票を **{{status}}** にしました。"
+  },
+  "setting>nowplaying": {
+    "name": "設定>現在再生中",
+    "description": "現在再生中パネルの表示モードの設定をします。何も指定しないと現在の設定を確認できます。",
+    "args": {
+      "level": {
+        "description": "表示モードを指定します。",
+        "choices": {
+          "normal": "通常",
+          "silent": "サイレント",
+          "disabled": "無効"
+        }
+      }
+    },
+    "invalidLevel": "指定されたモードが正しくありません。normal, silent, disabledのいずれかを指定してください。",
+    "changed": "現在再生中パネルの表示モードを **{{level}}** に設定しました。",
+    "currentState": "現在再生中パネルの表示モードは現在 **{{level}}** に設定されています。"
+  },
   "shuffle": {
     "name": "シャッフル",
     "description": "キューの内容をシャッフルします。",
@@ -441,6 +559,22 @@
     "votePanelAlreadyOpen": "すでに開かれている投票パネルがあります。",
     "success": "`{{title}}`をスキップしました",
     "failed": "スキップに失敗しました"
+  },
+  "sleeptimer": {
+    "name": "スリープタイマー",
+    "description": "指定された時間が経過した後に、音楽の再生を自動的に終了します。",
+    "examples": "スリープタイマー 5:00",
+    "usage": "スリープタイマー <時間(分:秒の形式で)または$で現在再生中の楽曲の終了時>",
+    "args": {
+      "time": {
+        "description": "スリープタイマーの時間。分:秒の形式で指定します。この曲で終了する場合は$を指定します。"
+      }
+    },
+    "done": "スリープタイマーを **{{time}}** に設定しました。",
+    "doneCurrentSong": "スリープタイマーを、この曲が終わるタイミングに設定しました。",
+    "canceled": "スリープタイマーをキャンセルしました。",
+    "invalidTime": "指定された時間が正しくありません。「時間:分:秒」の形式か、この曲で終了する場合は$と指定してください。",
+    "slept": "スリープタイマーの時間になったため、終了します。"
   },
   "thumbnail": {
     "name": "サムネイル",
@@ -479,24 +613,5 @@
     "outOfRange": "音量を変更する際は1から200の数字で指定してください。",
     "changed": "音量を**{{volume}}**に変更しました。",
     "appliedFromNext": "次の曲から適用されます。現在再生中の曲に設定を適用するには、`頭出し`コマンドなどを使用してください。"
-  },
-  "loopqueue": {
-    "disabled": "キューループを無効にしました。",
-    "enabled": "キューループを有効にしました。",
-    "name": "キューループ",
-    "description": "キュー内のループを設定します。"
-  },
-  "looponce": {
-    "name": "ワンスループ",
-    "description": "現在再生中の再生が終了後、もう一度だけ同じ曲をループ再生します。",
-    "disabled": "ワンスループを無効にしました",
-    "enabled": "ワンスループを有効にしました"
-  },
-  "equalplayback": {
-    "name": "均等再生",
-    "description": "追加ユーザーごとにキュー内の楽曲を均等に再生します。",
-    "enabled": "均等再生をオンにしました",
-    "disabled": "均等再生をオフにしました",
-    "featureDescription": "楽曲追加時に、楽曲を追加したユーザーごとにできるだけ均等になるようにする機能です。"
   }
 }

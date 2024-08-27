@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,34 +16,35 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { UrlStreamInfo } from ".";
-import type { i18n } from "i18next";
+import type { AudioSourceBasicJsonFormat, UrlStreamInfo } from ".";
 
 import { AudioSource } from "./audiosource";
-import { isAvailableRawAudioURL, retriveLengthSeconds } from "../Util";
+import { getCommandExecutionContext } from "../Commands";
+import { getResourceTypeFromUrl, retrieveRemoteAudioInfo } from "../Util";
 
-export class CustomStream extends AudioSource<string> {
+export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat> {
   constructor(){
-    super("custom");
-    this._unableToCache = true;
+    super({ isCacheable: false });
   }
 
-  async init(url: string, prefetched: exportableCustom, t: i18n["t"]){
+  async init(url: string, prefetched: AudioSourceBasicJsonFormat | null){
+    const { t } = getCommandExecutionContext();
+
     if(prefetched){
       this.title = prefetched.title || t("audioSources.customStream");
       this.url = url;
       this.lengthSeconds = prefetched.length;
-    }else{
-      if(!isAvailableRawAudioURL(url)){
-        throw new Error(t("audioSources.invalidStream"));
-      }
+    }else if(getResourceTypeFromUrl(url) !== "none"){
       this.url = url;
-      this.title = this.extractFilename() || t("audioSources.customStream");
-      try{
-        this.lengthSeconds = await retriveLengthSeconds(url);
-      }
-      catch{ /* empty */ }
+      const info = await retrieveRemoteAudioInfo(url);
+      this.title = info.displayTitle || this.extractFilename() || t("audioSources.customStream");
+      this.lengthSeconds = info.lengthSeconds || 0;
+    }else{
+      throw new Error(t("audioSources.invalidStream"));
     }
+
+    this.isPrivateSource = this.url.startsWith("https://cdn.discordapp.com/ephemeral-attachments/");
+
     return this;
   }
 
@@ -52,10 +53,13 @@ export class CustomStream extends AudioSource<string> {
       type: "url",
       url: this.url,
       streamType: "unknown",
+      canBeWithVideo: getResourceTypeFromUrl(this.url) === "video",
     };
   }
 
-  toField(_: boolean, t: i18n["t"]){
+  toField(_: boolean){
+    const { t } = getCommandExecutionContext();
+
     return [
       {
         name: ":link:URL",
@@ -72,7 +76,7 @@ export class CustomStream extends AudioSource<string> {
     return "";
   }
 
-  exportData(): exportableCustom{
+  exportData(): AudioSourceBasicJsonFormat{
     return {
       url: this.url,
       length: this.lengthSeconds,
@@ -81,13 +85,8 @@ export class CustomStream extends AudioSource<string> {
   }
 
   private extractFilename(){
-    const paths = this.url.split("/");
-    return paths[paths.length - 1];
+    const url = new URL(this.url);
+    return url.pathname.split("/").at(-1);
   }
 }
 
-export type exportableCustom = {
-  url: string,
-  length: number,
-  title: string,
-};

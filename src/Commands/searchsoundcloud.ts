@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -17,18 +17,18 @@
  */
 
 import type { SoundCloudTrackCollection } from "../AudioSource";
-import type { i18n } from "i18next";
 import type { SoundcloudTrackV2 } from "soundcloud.ts";
 
 import candyget from "candyget";
 import Soundcloud from "soundcloud.ts";
 
+import { getCommandExecutionContext } from ".";
 import { SearchBase } from "./search";
 import * as Util from "../Util";
-import { useConfig } from "../config";
+import { getConfig } from "../config";
 import { DefaultUserAgent } from "../definition";
 
-const config = useConfig();
+const config = getConfig();
 
 export default class Searchs extends SearchBase<SoundcloudTrackV2[]> {
   private readonly soundcloud = new Soundcloud();
@@ -38,7 +38,7 @@ export default class Searchs extends SearchBase<SoundcloudTrackV2[]> {
       alias: ["soundcloudを検索", "searchsoundcloud", "searchs", "ses", "ss", "sc", "soundcloud"],
       unlist: false,
       category: "playlist",
-      argument: [{
+      args: [{
         type: "string",
         name: "keyword",
         required: true,
@@ -57,11 +57,15 @@ export default class Searchs extends SearchBase<SoundcloudTrackV2[]> {
     if(query.match(/^https:\/\/soundcloud.com\/[^/]+$/)){
       // ユーザーの楽曲検索
       const user = await this.soundcloud.users.getV2(query);
+      const clientId = await this.soundcloud.api.getClientId();
+
       transformedQuery = user.username;
       let nextUrl = "";
       let rawResult = await this.soundcloud.api.getV2(`users/${user.id}/tracks`) as SoundCloudTrackCollection;
+
+      // 再帰的にユーザーの投稿した楽曲を取得する
       result.push(...rawResult.collection);
-      nextUrl = rawResult.next_href + "&client_id=" + await this.soundcloud.api.getClientID();
+      nextUrl = `${rawResult.next_href}&client_id=${clientId}`;
       while(nextUrl && result.length < 10){
         rawResult = await candyget.json(nextUrl, {
           headers: {
@@ -69,7 +73,9 @@ export default class Searchs extends SearchBase<SoundcloudTrackV2[]> {
           },
         }).then(({ body }) => body as SoundCloudTrackCollection);
         result.push(...rawResult.collection);
-        nextUrl = rawResult.next_href ? `${rawResult.next_href}&client_id=${await this.soundcloud.api.getClientID()}` : rawResult.next_href;
+        nextUrl = rawResult.next_href
+          ? `${rawResult.next_href}&client_id=${clientId}`
+          : rawResult.next_href;
       }
     }else{
       // 楽曲検索
@@ -82,7 +88,9 @@ export default class Searchs extends SearchBase<SoundcloudTrackV2[]> {
     };
   }
 
-  protected override consumer(result: SoundcloudTrackV2[], t: i18n["t"]){
+  protected override consumer(result: SoundcloudTrackV2[]){
+    const { t } = getCommandExecutionContext();
+
     return result.map(item => {
       const [min, sec] = Util.time.calcMinSec(Math.floor(item.duration / 1000));
       return {

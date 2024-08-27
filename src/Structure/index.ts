@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,6 +18,6 @@
 
 export * from "./LogEmitter";
 export * from "./ServerManagerBase";
-export * from "./Command";
+export * from "../types/Command";
 export * from "./GuildDataContainer";
-export * from "./YmxFormat";
+export * from "../types/YmxFormat";

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -19,7 +19,7 @@
 import type { MusicBot } from "../bot";
 import type { AutocompleteInteraction } from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 
 export async function handleAutoCompleteInteraction(
   this: MusicBot,
@@ -29,7 +29,7 @@ export async function handleAutoCompleteInteraction(
   if(!option){
     return;
   }
-  
+
   const targetCommand = CommandManager.instance.resolve(interaction.data.name);
   const possibleOptions = targetCommand?.handleAutoComplete(
     option.name,

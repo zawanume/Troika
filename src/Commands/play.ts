@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,7 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
+import type * as dYtsr from "@distube/ytsr";
 import type * as ytsr from "ytsr";
 
 import { ApplicationCommandTypes } from "oceanic.js";
@@ -32,7 +32,7 @@ export default class Play extends BaseCommand {
       alias: ["play", "p", "resume", "re"],
       unlist: false,
       category: "player",
-      argument: [
+      args: [
         {
           type: "string",
           name: "keyword",
@@ -44,14 +44,18 @@ export default class Play extends BaseCommand {
           required: false,
         },
       ],
+      usage: false,
+      examples: false,
       requiredPermissionsOr: [],
       shouldDefer: true,
       messageCommand: true,
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     const server = context.server;
     const firstAttachment = Array.isArray(message.attachments) ? message.attachments[0] : message.attachments.first();
 
@@ -70,7 +74,7 @@ export default class Play extends BaseCommand {
 
     const wasConnected = server.player.isConnecting;
     //VCに入れない
-    if(!await context.server.joinVoiceChannel(message, { replyOnFail: true }, t)){
+    if(!await context.server.joinVoiceChannel(message, { replyOnFail: true })){
       return;
     }
 
@@ -78,7 +82,7 @@ export default class Play extends BaseCommand {
     if(context.rawArgs === "" && server.player.isPaused){
       server.player.resume();
       await message.reply({
-        content: `${context.includeMention ? `<@${message.member.id}> ` : ""}:arrow_forward:${t("commands:play.resuming")}`,
+        content: `${context.includeMention ? `<@${message.member.id}> ` : ""} :arrow_forward:${t("commands:play.resuming")}`,
         allowedMentions: {
           users: false,
         },
@@ -91,7 +95,7 @@ export default class Play extends BaseCommand {
       // 引数ついてたらそれ優先して再生する
       if(context.rawArgs.startsWith("http://") || context.rawArgs.startsWith("https://")){
         // ついていた引数がURLなら
-        await context.server.playFromURL(message, context.args as string[], { first: !wasConnected }, t);
+        await context.server.playFromUrl(message, context.args as string[], { first: !wasConnected });
       }else{
         // URLでないならキーワードとして検索
         const msg = await message.channel.createMessage({
@@ -99,61 +103,67 @@ export default class Play extends BaseCommand {
         });
 
         try{
-          let videos: ytsr.Video[] = null;
+          let videos: ytsr.Video[] | dYtsr.Video[] = null!;
+
           if(context.bot.cache.hasSearch(context.rawArgs)){
             videos = await context.bot.cache.getSearch(context.rawArgs);
           }else{
             const result = await searchYouTube(context.rawArgs);
-            videos = result.items.filter(it => it.type === "video") as ytsr.Video[];
+            videos = (result.items as (ytsr.Item | dYtsr.Video)[]).filter(it => it.type === "video") as (ytsr.Video[] | dYtsr.Video[]);
             context.bot.cache.addSearch(context.rawArgs, videos);
           }
+
           if(videos.length === 0){
-            await message.reply(`:face_with_monocle:${t("commands:play.noMusicFound")}`);
-            await msg.delete();
+            await Promise.allSettled([
+              message.reply(`:face_with_monocle: ${t("commands:play.noMusicFound")}`),
+              msg.delete(),
+            ]);
             return;
           }
-          await context.server.playFromURL(message, videos[0].url, { first: !wasConnected, cancellable: context.server.queue.length >= 1 }, t);
-          await msg.delete();
+
+          await Promise.allSettled([
+            context.server.playFromUrl(message, videos[0].url, { first: !wasConnected, cancellable: context.server.queue.length >= 1 }),
+            msg.delete().catch(this.logger.error),
+          ]);
         }
         catch(e){
           this.logger.error(e);
-          message.reply(`✗${t("internalErrorOccurred")}`).catch(this.logger.error);
+          message.reply(`✗ ${t("internalErrorOccurred")}`).catch(this.logger.error);
           msg.delete().catch(this.logger.error);
         }
       }
     }else if(firstAttachment){
       // 添付ファイルを確認
-      await context.server.playFromURL(
+      await context.server.playFromUrl(
         message,
         firstAttachment.url,
         { first: !wasConnected },
-        t
       );
     }else if(message["_message"]?.referencedMessage){
       // 返信先のメッセージを確認
       const messageReference = message["_message"].referencedMessage;
       if(messageReference.inCachedGuildChannel()){
         context.server
-          .playFromMessage(message, messageReference, context, { first: !wasConnected }, t)
+          .playFromMessage(message, messageReference, context, { first: !wasConnected })
           .catch(this.logger.error);
       }
     }else if(message["_interaction"] && "type" in message["_interaction"].data && message["_interaction"].data.type === ApplicationCommandTypes.MESSAGE){
       const messageReference = message["_interaction"].data.resolved.messages.first();
-      if(messageReference.inCachedGuildChannel()){
+      if(messageReference?.inCachedGuildChannel()){
         context.server
-          .playFromMessage(message, messageReference, context, { first: !wasConnected }, t)
+          .playFromMessage(message, messageReference, context, { first: !wasConnected })
           .catch(this.logger.error);
       }
     }else if(server.queue.length >= 1){
       // なにもないからキューから再生
       if(!server.player.isPlaying && !server.player.preparing){
         await message.reply(t("commands:play.playing")).catch(this.logger.error);
-        await server.player.play();
+        await server.player.play({ bgm: false });
       }else{
         await message.reply(t("commands:play.alreadyPlaying")).catch(this.logger.error);
       }
     }else{
-      await message.reply(`✘${t("commands:play.queueEmpty")}`).catch(this.logger.error);
+      await message.reply(`✘ ${t("commands:play.queueEmpty")}`).catch(this.logger.error);
     }
   }
 }

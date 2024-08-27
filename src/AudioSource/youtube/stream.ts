@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -19,9 +19,10 @@
 import type { IncomingMessage } from "http";
 import type { Readable } from "stream";
 
+import * as distubeYtdl from "@distube/ytdl-core";
 import * as ytdl from "ytdl-core";
 
-import { createFragmentalDownloadStream, createPassThrough } from "../../Util";
+import { assertIs, createFragmentalDownloadStream, createPassThrough } from "../../Util";
 import { getLogger } from "../../logger";
 
 const logger = getLogger("AudioSource:YouTubeStream");
@@ -40,7 +41,21 @@ export function createChunkedYTStream(info: ytdl.videoInfo, format: ytdl.videoFo
   );
 }
 
-export function createRefreshableYTLiveStream(info: ytdl.videoInfo, url: string, options: ytdl.downloadOptions){
+export function createChunkedDistubeYTStream(info: distubeYtdl.videoInfo, format: distubeYtdl.videoFormat, options: distubeYtdl.downloadOptions, chunkSize: number = 512 * 1024){
+  return createFragmentalDownloadStream(
+    (start, end) => distubeYtdl.downloadFromInfo(info, {
+      format,
+      ...options,
+      range: { start, end },
+    }),
+    {
+      chunkSize,
+      contentLength: Number(format.contentLength),
+    }
+  );
+}
+
+export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl.videoInfo, url: string, options: ytdl.downloadOptions | distubeYtdl.downloadOptions, distube: boolean = false){
   // set timeout to any miniget stream
   const setStreamNetworkTimeout = (_stream: Readable) => {
     _stream.on("response", (message: IncomingMessage) => {
@@ -56,14 +71,27 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo, url: string,
   };
 
   // start to download the live stream from the provided information (info object or url string)
-  const downloadLiveStream = async (targetInfo: ytdl.videoInfo|string) => {
+  const downloadLiveStream = async (targetInfo: ytdl.videoInfo | distubeYtdl.videoInfo | string) => {
     if(typeof targetInfo === "string"){
       targetInfo = await ytdl.getInfo(targetInfo);
       options.format = ytdl.chooseFormat(targetInfo.formats, { isHLS: true } as ytdl.chooseFormatOptions);
     }
-    return ytdl.downloadFromInfo(targetInfo, Object.assign({
-      liveBuffer: 10000,
-    }, options));
+
+    if(distube){
+      assertIs<distubeYtdl.videoInfo>(targetInfo);
+      assertIs<distubeYtdl.downloadOptions>(options);
+
+      return distubeYtdl.downloadFromInfo(targetInfo, Object.assign({
+        liveBuffer: 10000,
+      }, options));
+    }else{
+      assertIs<ytdl.videoInfo>(targetInfo);
+      assertIs<ytdl.downloadOptions>(options);
+
+      return ytdl.downloadFromInfo(targetInfo, Object.assign({
+        liveBuffer: 10000,
+      }, options));
+    }
   };
 
   // handle errors occurred by the current live stream
@@ -79,9 +107,11 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo, url: string,
 
   // destroy the current stream safely
   const destroyCurrentStream = (er?: Error) => {
-    currentStream.removeAllListeners("error");
-    currentStream.on("error", () => {});
-    currentStream.destroy(er);
+    if(currentStream){
+      currentStream.removeAllListeners("error");
+      currentStream.on("error", () => {});
+      currentStream.destroy(er);
+    }
   };
 
   // indicates if the stream is refreshing now or not.
@@ -110,7 +140,7 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo, url: string,
     }
   };
 
-  let currentStream: Readable = null;
+  let currentStream: Readable | null = null;
   const timeout = setInterval(refreshStream, 40 * 60 * 1000).unref();
   const stream = createPassThrough({
     allowHalfOpen: true,

@@ -4,20 +4,53 @@
     "description": "Shows BGM playlists that the developer of this bot shares, and you can choose and play them.",
     "listOfPresetBGM": "Available BGM Presets"
   },
-  "bulk-delete": {
+  "bulk_delete": {
+    "name": "bulkdelete",
+    "usage": "bulkdelete <message count>",
+    "examples": "bulkdelete 10",
+    "description": "Deletes messages the bot sent. Fetches and finds in recent 1000 messages.",
     "invalidMessageCount": "Provided message count is invalid.",
-    "loading": "Fetching",
-    "hitCount_one": "{{count}} message found.",
-    "hitCount_other": "{{count}} messages found.",
-    "inCount_one": "in {{count}} message",
-    "inCount_other": "in {{count}} messages",
     "found_one": "{{count}} message found.",
+    "inCount_other": "in {{count}} messages",
+    "inCount_one": "in {{count}} message",
     "found_other": "{{count}} messages found.",
     "confirm": "Press the button below to confirm bulk-deletion of messages.\nIf not, the operation will be automatically cancelled after a while.",
     "auditLog_one": "Because {{issuer}} requested to delete {{count}} message.",
     "auditLog_other": "Because {{issuer}} requested to delete {{count}} messages.",
     "finish": "Done! (This message will be deleted automatically)",
-    "cancel": "Canceled the deletions."
+    "cancel": "Canceled the deletions.",
+    "hitCount_other": "{{count}} messages found.",
+    "hitCount_one": "{{count}} message found.",
+    "loading": "Fetching",
+    "args": {
+      "count": {
+        "description": "The maximum number of messages to be deleted. This should be 100 or less."
+      }
+    }
+  },
+  "bulk_play": {
+    "name": "bulk_play",
+    "usage": "bulk_play <URL or keyword> <URL or keyword> ...",
+    "examples": "bulk_play \"songA\" \"songB\" \"songC\"",
+    "description": "Bulk-adds and play multiple songs.",
+    "args": {
+      "keyword1": {
+        "description": "Keyword or URL of the song you want to play."
+      },
+      "keyword2": {
+        "description": "Keyword or URL of the song you want to play."
+      },
+      "keyword3": {
+        "description": "Keyword or URL of the song you want to play."
+      },
+      "keyword4": {
+        "description": "Keyword or URL of the song you want to play."
+      },
+      "keyword5": {
+        "description": "Keyword or URL of the song you want to play."
+      }
+    },
+    "partialSuccess": "Some part of songs you requested couldn't be found."
   },
   "cancel": {
     "name": "cancel",
@@ -40,7 +73,8 @@
       "player": "Music Player Related",
       "playlist": "Playlist Related",
       "utility": "Utilities",
-      "bot": "Bot Operation"
+      "bot": "Bot Operation",
+      "settings": "Settings"
     },
     "commandList": "Command List",
     "toLearnMoreMessage": "Like `{{prefix}}command play`, you can add a command name as an argument to display the details of that command.",
@@ -70,6 +104,13 @@
     "description": "Removes all songs from queue except for the current playing song (or the song waiting to be played).",
     "queueWasEmpty": "Nothing was removed because of no items or just one item in queue.",
     "success": "Deleted all items left in queue."
+  },
+  "equalplayback": {
+    "name": "equalplayback",
+    "description": "Plays same amount of songs for each user.",
+    "enabled": "Enabled equal playback.",
+    "disabled": "Disabled equal playback.",
+    "featureDescription": "This is a function that makes it as even as possible for each user who added songs when playing songs."
   },
   "export": {
     "name": "export",
@@ -221,6 +262,18 @@
     "disabled": "Disabled track loop.",
     "enabled": "Enabled track loop."
   },
+  "looponce": {
+    "name": "looponce",
+    "description": "After the current playback ends, play the same song again in a loop.",
+    "disabled": "Disabled loop once",
+    "enabled": "Enabled loop once"
+  },
+  "loopqueue": {
+    "disabled": "Disabled queue loop.",
+    "enabled": "Enabled queue loop.",
+    "name": "loopqueue",
+    "description": "Toggles looping the entire queue."
+  },
   "lyrics": {
     "name": "lyrics",
     "description": "Finds lyrics of the specified song.",
@@ -308,6 +361,12 @@
     "alreadyPlaying": "It's playing just now.",
     "queueEmpty": "Queue is empty. No content to play."
   },
+  "play_private": {
+    "description": "Adds a new song from the URL to queue secretly, and starts playing if possible.",
+    "noInteraction": "Unable to use this command by text-based-message.",
+    "modalTitle": "What would you like to play?",
+    "inputLabel": "URL of the song you'd like to play."
+  },
   "queue": {
     "name": "queue",
     "description": "Shows queue.",
@@ -321,6 +380,21 @@
     "songCount_one": "{{count}} song",
     "songCount_other": "{{count}} songs",
     "total": "Total"
+  },
+  "radio": {
+    "name": "radio",
+    "description": "Starts or stops a radio (mix list) based on the specified URL of the song. If you specified nothing, starts a new radio from the current playing song.",
+    "args": {
+      "url": {
+        "description": "URL on YouTube of the song that the radio is based on."
+      }
+    },
+    "alreadyEnabled": "The radio is already enabled. If you want to start a new radio based on another song, you need to disable the mix list that is currently played at first.",
+    "noUrlSpecified": "Provide a URL of the song that the radio will be based on.",
+    "invalidUrl": "The provided URL is not valid one on YouTube.",
+    "started": "Started a radio based on the specified song.",
+    "startedFromCurrentSong": "Started a radio based on the current playing song.",
+    "stopped": "Radio stopped."
   },
   "related": {
     "name": "related",
@@ -388,6 +462,18 @@
     },
     "noArgument": "Set the argument."
   },
+  "searchnico": {
+    "name": "searchnico",
+    "description": "Searches songs on Nico-Nico Douga.",
+    "examples": "searchnico setsuna trip",
+    "usage": "searchnico <keyword>",
+    "args": {
+      "keyword": {
+        "description": "Keyword or URL of the song you want to search for."
+      }
+    },
+    "noArgument": "Set the argument."
+  },
   "searchqueue": {
     "name": "searchqueue",
     "description": "Searches in queue. Specify keywords for the argument.",
@@ -428,6 +514,38 @@
     "success": "Seeked",
     "failed": "Seek failed"
   },
+  "setting": {
+    "name": "setting",
+    "description": "Changes the bot's settings."
+  },
+  "setting>skipvote": {
+    "name": "setting>skipvote",
+    "description": "Configures if skip-vote is enabled or not. Shows current setting with no option provided.",
+    "args": {
+      "enabled": {
+        "description": "If you want to enable skip-vote feature, specify true. Otherwise, false."
+      }
+    },
+    "currentState": "The skip-vote feature is currently **{{status}}**.",
+    "changed": "The skip-vote feature is now **{{status}}**."
+  },
+  "setting>nowplaying": {
+    "name": "setting>nowplaying",
+    "description": "Configures the display mode of now-playing embeds. Shows the current setting with no option provided.",
+    "args": {
+      "level": {
+        "description": "Specify a display mode of the now-playing embeds.",
+        "choices": {
+          "normal": "Normal",
+          "silent": "Silent",
+          "disabled": "Disabled"
+        }
+      }
+    },
+    "invalidLevel": "The display-mode you specified was incorrect. Please specify one of three, \"normal\", \"silent\", or \"disabled\".",
+    "changed": "The display-mode was set to **{{level}}**.",
+    "currentState": "The current display mode was set to **{{level}}**."
+  },
   "shuffle": {
     "name": "shuffle",
     "description": "Shuffles the queue.",
@@ -441,6 +559,22 @@
     "votePanelAlreadyOpen": "There's already another skip vote opened.",
     "success": "Skipped `{{title}}`",
     "failed": "Skip failed"
+  },
+  "sleeptimer": {
+    "name": "sleeptimer",
+    "description": "Exits from the voice channel when the specific time elapsed.",
+    "examples": "sleeptimer 5:00",
+    "usage": "sleeptimer <time(formatted like \"mm:ss\") or $ (the end of the current playing song)>",
+    "args": {
+      "time": {
+        "description": "Time you want to set a sleep timer. Type in \"mm:ss\" format, or $ to set the timer at the end of the current song."
+      }
+    },
+    "done": "Successfully set the sleep timer in **{{time}}**.",
+    "doneCurrentSong": "Successfully set the sleep timer at the end of the current song.",
+    "canceled": "Canceled the sleep timer.",
+    "invalidTime": "Invalid time specified. Type in the \"hh:mm:ss\" format to set the sleep timer in the manual time, or just \"$\" to set at the end of the current song.",
+    "slept": "Disconnecting from the voice channel since it is a time the sleep timer set."
   },
   "thumbnail": {
     "name": "thumbnail",
@@ -458,16 +592,16 @@
     "name": "uptime",
     "description": "Shows bot's uptime.",
     "embedTitle": "{{name}} uptime",
-    "elapsedAfterInstantiated": "Elapsed Time from Bot Starts",
-    "elapsedAfterConnected": "Elapsed Time from Connecting to Discord",
-    "registeredServerCount": "Number of servers holding data",
+    "elapsedAfterInstantiated": "Elapsed Time since Bot Starts",
+    "elapsedAfterConnected": "Elapsed Time since Connection Established",
+    "registeredServerCount": "Number of Servers Holding Data",
     "datetimeLabel": "{{hour}} hours {{min}} minutes {{sec}} seconds",
     "serverCount_one": "{{count}} server",
     "serverCount_other": "{{count}} servers"
   },
   "volume": {
     "name": "volume",
-    "description": "Changes the volume. Set between 1 and 200. (The default value is 100.) When you provide no argument, shows the current volume. If it becomes unstable, set the volume to 100.",
+    "description": "Changes the volume. When no argument provided, shows the current volume. The valid range of the volume is 1~200 (and 100 is the default). If it becomes unstable, set the volume to 100.",
     "examples": "volume [number]",
     "usage": "volume 120",
     "args": {
@@ -479,24 +613,5 @@
     "outOfRange": "Please provide the value between 1 and 200.",
     "changed": "Changed the volume to **{{volume}}**.",
     "appliedFromNext": "It will be applied from the next song. If you'd like to apply to the current playing song, use command `rewind`."
-  },
-  "loopqueue": {
-    "disabled": "Disabled queue loop.",
-    "enabled": "Enabled queue loop.",
-    "name": "loopqueue",
-    "description": "Toggles looping the entire queue."
-  },
-  "looponce": {
-    "name": "looponce",
-    "description": "After the current playback ends, play the same song again in a loop.",
-    "disabled": "Disabled loop once",
-    "enabled": "Enabled loop once"
-  },
-  "equalplayback": {
-    "name": "equalplayback",
-    "description": "Plays same amount of songs for each user.",
-    "enabled": "Enabled equal playback.",
-    "disabled": "Disabled equal playback.",
-    "featureDescription": "This is a function that makes it as even as possible for each user who added songs when playing songs."
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -17,6 +17,7 @@
  */
 
 import type { ReadableStreamInfo, StreamInfo, StreamTypeIdentifer, UrlStreamInfo } from "../../AudioSource";
+import type { ExportedAudioEffect } from "../audioEffectManager";
 import type { Readable } from "stream";
 
 import { opus } from "prism-media";
@@ -45,23 +46,26 @@ const logger = getLogger("StreamResolver");
 export async function resolveStreamToPlayable(
   originalStreamInfo: StreamInfo,
   {
-    effectArgs,
+    effects,
     seek,
     volumeTransformEnabled,
     bitrate,
   }: {
-    effectArgs: string[],
+    effects: ExportedAudioEffect,
     seek: number,
     volumeTransformEnabled: boolean,
     bitrate: number,
   }
 ): Promise<PlayableStreamInfo> {
   /** エフェクトが有効になっているか */
-  const effectEnabled = effectArgs.length !== 0;
+  const effectEnabled = effects.args.length !== 0;
   /** シークが有効になっているか  */
   const seekEnabled = seek > 0;
   /** Node.js側でダウンロードすべきかどうか */
-  const shouldDownload = originalStreamInfo.streamType !== "m3u8" && !seekEnabled;
+  const shouldDownload = originalStreamInfo.type === "url"
+    && originalStreamInfo.streamType !== "m3u8"
+    && !originalStreamInfo.canBeWithVideo
+    && !seekEnabled;
   /** shouldDownloadがtrueの場合は常にReadableStreamInfo。それ以外の場合は、UrlStreamInfoの可能性もあります */
   const streamInfo = shouldDownload ? convertStreamInfoToReadableStreamInfo(originalStreamInfo) : originalStreamInfo;
 
@@ -120,13 +124,12 @@ export async function resolveStreamToPlayable(
       // Unknown --(FFmpeg)--> PCM
       //              2
       logger.info(`stream edges: raw(${streamInfo.streamType || "unknown"}) --(FFmpeg) --> PCM`);
-      const ffmpeg = transformThroughFFmpeg(streamInfo, { bitrate, effectArgs, seek, output: "pcm" });
+      const ffmpeg = transformThroughFFmpeg(streamInfo, { bitrate, effects, seek, output: "pcm" });
 
       ffmpeg
         .on("error", e => destroyStream(pcmStream, e))
         .pipe(pcmStream)
-        .once("close", () => destroyStream(ffmpeg))
-      ;
+        .once("close", () => destroyStream(ffmpeg));
 
       if(streamInfo.type === "readable"){
         streams.push(streamInfo.stream);
@@ -145,7 +148,7 @@ export async function resolveStreamToPlayable(
     // Unknown --(FFmpeg)--> Ogg/Opus
     logger.info(`stream edges: raw(${streamInfo.streamType || "unknown"}) --(FFmpeg)--> Webm/Ogg`);
     const ffmpegOutput = streamInfo.streamType === "webm/opus" ? "webm" : "ogg";
-    const ffmpeg = transformThroughFFmpeg(streamInfo, { bitrate, effectArgs, seek, output: ffmpegOutput });
+    const ffmpeg = transformThroughFFmpeg(streamInfo, { bitrate, effects: effects, seek, output: ffmpegOutput });
     const passThrough = createPassThrough();
     ffmpeg
       .on("error", e => destroyStream(passThrough, e))
@@ -157,6 +160,7 @@ export async function resolveStreamToPlayable(
       stream: passThrough,
       streamType: ffmpegOutput === "webm" ? "webm/opus" : "ogg/opus",
       cost: 2 + 1,
+      // @ts-expect-error undefined will be filtered by Array#filter
       streams: [streamInfo.type === "readable" ? streamInfo.stream : undefined, ffmpeg, passThrough].filter(d => d),
     };
   }
@@ -176,15 +180,22 @@ export function destroyStream(stream: Readable, error?: Error){
   }
 }
 
-function convertStreamInfoToReadableStreamInfo(streamInfo: UrlStreamInfo|ReadableStreamInfo): ReadableStreamInfo{
+function convertStreamInfoToReadableStreamInfo(streamInfo: UrlStreamInfo | ReadableStreamInfo): ReadableStreamInfo{
   if(streamInfo.type === "readable"){
     return streamInfo;
   }
+
+  logger.debug("Converting to Readable.");
+
   return {
     type: "readable",
     stream: downloadAsReadable(streamInfo.url, streamInfo.userAgent ? {
       headers: {
         "User-Agent": streamInfo.userAgent,
+        "cookie": streamInfo.cookie
+          ?.split("\n")
+          .map(c => c.trim().split(";")[0])
+          .join(";"),
       },
     } : {}),
     streamType: streamInfo.streamType,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -25,9 +25,9 @@ import { isMainThread } from "worker_threads";
 import log4js from "log4js";
 
 import { stringifyObject } from "./Util";
-import { useConfig } from "./config";
+import { getConfig } from "./config";
 
-const { debug, maxLogFiles } = useConfig();
+const { debug, maxLogFiles } = getConfig();
 
 
 const tokens = {
@@ -71,10 +71,15 @@ const memoryAppender = {
       const logContent = `${level}:[${
         tokens.category(logEvent)
       }] ${logEvent.data.map(data => typeof data === "string" ? data : stringifyObject(data))}`;
-      memoryStore.push(logContent);
+
+      if(!logContent.includes("(SECRET)")){
+        memoryStore.push(logContent);
+      }
+
       if(memoryStore.length > MEMORYSTORE_MAXSIZE){
         memoryStore.shift();
       }
+
       if(process.env.CONSOLE_ENABLE){
         console[level === "F" || level === "E" ? "error" : level === "W" ? "warn" : "log"](logContent);
       }
@@ -153,59 +158,34 @@ export type LoggerObject = {
   warn: log4js.Logger["warn"],
   error: log4js.Logger["error"],
   fatal: log4js.Logger["fatal"],
+};
+export type LoggerObjectWithContext = LoggerObject & {
   addContext: log4js.Logger["addContext"],
 };
 
 const loggerMap = new Map<string, LoggerObject>();
 
-export function getLogger(tag: string){
-  if(loggerMap.has(tag)){
+export function getLogger(tag: string, createNew?: false): LoggerObject;
+export function getLogger(tag: string, createNew: true): LoggerObjectWithContext;
+export function getLogger(tag: string, createNew: boolean = false){
+  if(loggerMap.has(tag) && !createNew){
     return loggerMap.get(tag);
   }else{
     const log4jsLogger = log4js.getLogger(tag);
-    const logger: LoggerObject = {
+    const logger: LoggerObject | LoggerObjectWithContext = {
       trace: log4jsLogger.trace.bind(log4jsLogger),
       debug: log4jsLogger.debug.bind(log4jsLogger),
       info: log4jsLogger.info.bind(log4jsLogger),
       warn: log4jsLogger.warn.bind(log4jsLogger),
       error: log4jsLogger.error.bind(log4jsLogger),
       fatal: log4jsLogger.fatal.bind(log4jsLogger),
-      addContext: log4jsLogger.addContext.bind(log4jsLogger),
+      addContext: createNew ? log4jsLogger.addContext.bind(log4jsLogger) : undefined,
     };
-    loggerMap.set(tag, logger);
+    if(!createNew){
+      loggerMap.set(tag, logger);
+    }
     return logger;
   }
-}
-
-const timerLogger = getLogger("Timer");
-export function timeLoggedMethod<This, Args extends any[], Return>(
-  originalMethod: (this: This, ...args: Args) => Return,
-  context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Return>
-){
-  return function replacementMethod(this: This, ...args: Args): Return {
-    const start = Date.now();
-    let end = false;
-    const endLog = () => {
-      if(end) return;
-      end = true;
-      timerLogger.trace(`${String(context.name)} elapsed ${Date.now() - start}ms`);
-    };
-    let result: any = null;
-    try{
-      result = originalMethod.call(this, ...args);
-      if(result instanceof Promise){
-        return result.finally(endLog) as any;
-      }else{
-        endLog();
-      }
-      return result;
-    }
-    finally{
-      if(typeof result !== "object" || !(result instanceof Promise)){
-        endLog();
-      }
-    }
-  };
 }
 
 

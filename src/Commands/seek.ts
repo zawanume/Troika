@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,9 +18,9 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { BaseCommand } from ".";
+import { colonSplittedTimeToSeconds } from "../Util/time";
 
 export default class Seek extends BaseCommand {
   constructor(){
@@ -28,7 +28,7 @@ export default class Seek extends BaseCommand {
       alias: ["seek"],
       unlist: false,
       category: "player",
-      argument: [{
+      args: [{
         type: "string",
         name: "keyword",
         required: true,
@@ -40,30 +40,23 @@ export default class Seek extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
-    const server = context.server;
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t, server } = context;
 
     // そもそも再生状態ではない場合
     if(!server.player.isPlaying || server.player.preparing){
       await message.reply(t("notPlaying")).catch(this.logger.error);
       return;
-    }else if(server.player.currentAudioInfo.lengthSeconds === 0 || server.player.currentAudioInfo.isUnseekable()){
+    }else if(server.player.currentAudioInfo!.lengthSeconds === 0 || !server.player.currentAudioInfo!.isSeekable){
       await message.reply(`:warning:${t("commands:seek.unseekable")}`).catch(this.logger.error);
       return;
     }
 
     // 引数から時間を算出
-    const time = (function(rawTime){
-      if(rawTime.match(/^(\d+:)*\d+$/)){
-        return rawTime.split(":").map(d => Number(d))
-          .reduce((prev, current) => prev * 60 + current);
-      }else{
-        return NaN;
-      }
-    }(context.rawArgs));
+    const time = colonSplittedTimeToSeconds(context.rawArgs);
 
-    if(time > server.player.currentAudioInfo.lengthSeconds || isNaN(time)){
+    if(time > server.player.currentAudioInfo!.lengthSeconds || isNaN(time)){
       await message.reply(`:warning:${t("commands:seek.invalidTime")}`).catch(this.logger.error);
       return;
     }
@@ -71,7 +64,7 @@ export default class Seek extends BaseCommand {
     try{
       const response = await message.reply(`:rocket:${t("commands:seek.seeking")}...`);
       await server.player.stop({ wait: true });
-      await server.player.play(time);
+      await server.player.play({ time });
       await response.edit(`:white_check_mark:${t("commands:seek.success")}`).catch(this.logger.error);
     }
     catch(e){

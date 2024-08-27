@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,21 +18,21 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 import type { EmbedOptions } from "oceanic.js";
 
-import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
-
 import * as os from "os";
+import path from "path";
+
+import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
 import { BaseCommand } from ".";
 import * as Util from "../Util";
 import { getColor } from "../Util/color";
 import { getMBytes } from "../Util/system";
-import { useConfig } from "../config";
+import { getConfig } from "../config";
 import { getLogs } from "../logger";
 
-const config = useConfig();
+const config = getConfig();
 
 export default class SystemInfo extends BaseCommand {
   constructor(){
@@ -40,7 +40,7 @@ export default class SystemInfo extends BaseCommand {
       alias: ["ログ", "log", "systeminfo", "sysinfo"],
       unlist: false,
       category: "utility",
-      argument: [{
+      args: [{
         type: "string",
         name: "content",
         required: false,
@@ -58,8 +58,33 @@ export default class SystemInfo extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+  getPackageVersion(mod: string): string{
+    try{
+      return require(`${mod}/package.json`).version;
+    }
+    catch{/* empty */}
+
+    try{
+      let packageRootPath = require.resolve(mod);
+      const fsModSuffix = mod.replace(/\//g, path.sep);
+
+      for(let i = 0; i < 5; i++){
+        packageRootPath = path.join(packageRootPath, "..");
+
+        if(packageRootPath.endsWith(fsModSuffix)){
+          break;
+        }
+      }
+
+      return require(path.join(packageRootPath, "package.json")).version;
+    }
+    catch{/* empty */}
+
+    return "unknown";
+  }
+
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
     // Run default logger
     context.bot.logGeneralInfo();
     await message.reply(t("commands:log.executing"));
@@ -87,25 +112,20 @@ export default class SystemInfo extends BaseCommand {
             }MB\``,
             true
           )
-          .addField(t("commands:log.modules"), [
-            "oceanic.js",
-            "@mtripg6666tdr/oceanic-command-resolver",
-            "@discordjs/voice",
-            "prism-media",
-            "@discordjs/opus",
-            "opusscript",
-            "zlib-sync",
-            "pako",
-          ]
-            .map(mod => {
-              try{
-                return `\`${mod}\`@v${require(`../../node_modules/${mod}/package.json`).version}`;
-              }
-              catch{
-                return `\`${mod}\`@unknown`;
-              }
-            })
-            .join("\r\n")
+          .addField(
+            t("commands:log.modules"),
+            [
+              "oceanic.js",
+              "@mtripg6666tdr/oceanic-command-resolver",
+              "@discordjs/voice",
+              "prism-media",
+              "@discordjs/opus",
+              "opusscript",
+              "zlib-sync",
+              "pako",
+            ]
+              .map(mod => `\`${mod}\`@${this.getPackageVersion(mod)}`)
+              .join("\r\n")
           )
           .setColor(getColor("UPTIME"))
           .toOceanic()
@@ -116,7 +136,7 @@ export default class SystemInfo extends BaseCommand {
       let logs: string[] = [...getLogs()];
       logs.reverse();
       for(let i = 0; i < logs.length; i++){
-        if(logs.join("\r\n").length < 1950) break;
+        if(logs.join("\r\n").length < 3950) break;
         logs = logs.slice(0, -1);
       }
       logs.reverse();
@@ -130,7 +150,7 @@ export default class SystemInfo extends BaseCommand {
       );
     }
 
-    if(config.isBotAdmin(message.member.id) && (context.args.includes("servers") || context.args.length === 0)){
+    if(config.isBotAdmin(message.member.id) && context.args.includes("servers") || context.args.length === 0){
       embeds.push(
         new MessageEmbedBuilder()
           .setColor(getColor("UPTIME"))
@@ -149,7 +169,7 @@ export default class SystemInfo extends BaseCommand {
     }
 
     if(config.isBotAdmin(message.member.id) && (context.args[0] === "server" && context.args[1] && context.client.guilds.has(context.args[1]))){
-      const target = context.client.guilds.get(context.args[1]);
+      const target = context.client.guilds.get(context.args[1])!;
       const data = context.bot.getData(context.args[1]);
       embeds.push(
         new MessageEmbedBuilder()
@@ -159,7 +179,7 @@ export default class SystemInfo extends BaseCommand {
           .addField(t("commands:log.guildId"), target.id, true)
           .addField(t("commands:log.guildIcon"), target.icon || t("none"), true)
           .addField(t("commands:log.guildChannelCountFromCache"), target.channels.size.toString(), true)
-          .addField(t("commands:log.memberCount"), target.memberCount?.toString() || target.approximateMemberCount?.toString() || "不明", true)
+          .addField(t("commands:log.memberCount"), target.memberCount?.toString() || target.approximateMemberCount?.toString() || t("unknown"), true)
           .addField(t("commands:log.guildConnecting"), data?.player.isConnecting ? t("yes") : t("no"), true)
           .addField(t("commands:log.guildPlaying"), data?.player.isPlaying ? t("yes") : t("no"), true)
           .addField(t("commands:log.guildPaused"), data?.player.isPaused ? t("yes") : t("no"), true)
@@ -170,7 +190,7 @@ export default class SystemInfo extends BaseCommand {
             data?.player.currentAudioInfo?.isYouTube() && data?.player.currentAudioInfo.isLiveStream ? t("yes") : t("no"),
             true
           )
-          .setThumbnail(target.iconURL())
+          .setThumbnail(target.iconURL()!)
           .toOceanic()
       );
     }
@@ -183,14 +203,18 @@ export default class SystemInfo extends BaseCommand {
       for(let i = 0; i < cpus.length; i++){
         const all = cpus[i].times.user + cpus[i].times.sys + cpus[i].times.nice + cpus[i].times.irq + cpus[i].times.idle;
         cpuInfoEmbed.addField(
-          "CPU" + (i + 1), "Model: `" + cpus[i].model + "`\r\n"
-        + "Speed: `" + cpus[i].speed + "MHz`\r\n"
-        + "Times(user): `" + Math.round(cpus[i].times.user / 1000) + "s(" + Util.getPercentage(cpus[i].times.user, all) + "%)`\r\n"
-        + "Times(sys): `" + Math.round(cpus[i].times.sys / 1000) + "s(" + Util.getPercentage(cpus[i].times.sys, all) + "%)`\r\n"
-        + "Times(nice): `" + Math.round(cpus[i].times.nice / 1000) + "s(" + Util.getPercentage(cpus[i].times.nice, all) + "%)`\r\n"
-        + "Times(irq): `" + Math.round(cpus[i].times.irq / 1000) + "s(" + Util.getPercentage(cpus[i].times.irq, all) + "%)`\r\n"
-        + "Times(idle): `" + Math.round(cpus[i].times.idle / 1000) + "s(" + Util.getPercentage(cpus[i].times.idle, all) + "%)`"
-          , true);
+          "CPU" + (i + 1),
+          [
+            `Model: \`${cpus[i].model}\``,
+            `Speed: \`${cpus[i].speed}MHz\``,
+            `Times(user): \`${Math.round(cpus[i].times.user / 1000)}s(${Util.getPercentage(cpus[i].times.user, all)}%)\``,
+            `Times(sys): \`${Math.round(cpus[i].times.sys / 1000)}s(${Util.getPercentage(cpus[i].times.sys, all)}%)\``,
+            `Times(nice): \`${Math.round(cpus[i].times.nice / 1000)}s(${Util.getPercentage(cpus[i].times.nice, all)}%)\``,
+            `Times(irq): \`${Math.round(cpus[i].times.irq / 1000)}s(${Util.getPercentage(cpus[i].times.irq, all)}%)\``,
+            `Times(idle): \`${Math.round(cpus[i].times.idle / 1000)}s(${Util.getPercentage(cpus[i].times.idle, all)}%)\``,
+          ].join("\r\n"),
+          true
+        );
       }
       embeds.push(cpuInfoEmbed.toOceanic());
     }
@@ -224,7 +248,7 @@ export default class SystemInfo extends BaseCommand {
           .toOceanic()
       );
     }
-    
+
     if(embeds.length > 0){
       await message.channel.createMessage({ embeds }).catch(this.logger.error);
     }

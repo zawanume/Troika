@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -33,9 +33,7 @@ export async function onVoiceChannelSwitch(
 
   if(member.id === this.client.user.id){
     if(this.guildData.has(member.guild.id)){
-      // work around
-      member.voiceState["_cachedChannel"] = null;
-      this.getData(member.guild.id).connectingVoiceChannel = member.voiceState.channel;
+      this.getData(member.guild.id)!.connectingVoiceChannel = member.voiceState!.channel!;
     }
   }else{
     onVoiceChannelLeave.call(this, member, oldChannel).catch(this.logger.error);

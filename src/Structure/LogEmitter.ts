@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -17,18 +17,18 @@
  */
 
 import type { EventDictionary } from "./TypedEmitter";
-import type { LoggerObject } from "../logger";
+import type { LoggerObjectWithContext } from "../logger";
 
 import TypedEventEmitter from "./TypedEmitter";
 import { getLogger } from "../logger";
 
 export abstract class LogEmitter<Events extends EventDictionary> extends TypedEventEmitter<Events> {
-  protected logger: LoggerObject;
-  private guildId: string = null;
+  protected logger: LoggerObjectWithContext;
+  private guildId: string | null = null;
 
-  constructor(tag: string, id?: string){
+  constructor(tag: string, id?: string | null){
     super();
-    this.logger = getLogger(tag);
+    this.logger = getLogger(tag, true);
     if(id){
       this.setGuildId(id);
     }
@@ -43,6 +43,10 @@ export abstract class LogEmitter<Events extends EventDictionary> extends TypedEv
   }
 
   getGuildId(){
+    if(!this.guildId){
+      throw new Error("Cannot read guild id before guild id initialized.");
+    }
+
     return this.guildId;
   }
 }

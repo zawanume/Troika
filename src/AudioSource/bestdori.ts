@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -16,14 +16,14 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { exportableCustom, UrlStreamInfo } from ".";
+import type { AudioSourceBasicJsonFormat, UrlStreamInfo } from ".";
 
 import candyget from "candyget";
 
 import { AudioSource } from "./audiosource";
-import { padZero } from "../Util";
+import { getCommandExecutionContext } from "../Commands";
 
-export class BestdoriS extends AudioSource<string> {
+export class BestdoriS extends AudioSource<string, BestdoriJsonFormat> {
   protected artist = "";
   protected type: "anime"|"normal"|null = null;
   protected lyricist: string;
@@ -31,48 +31,53 @@ export class BestdoriS extends AudioSource<string> {
   protected arranger: string;
   private id: number;
 
-  constructor(){
-    super("bestdori");
-  }
+  async init(url: string, prefetched: BestdoriJsonFormat){
+    const { t } = getCommandExecutionContext();
 
-  async init(url: string, prefetched: exportableBestdori){
     this.url = url;
-    await BestdoriApi.setupData();
-    this.id = BestdoriApi.getAudioId(url);
-    if(!this.id) throw new Error("Invalid streamable url");
-    const data = bestdori.allsonginfo[this.id];
+    const id = BestdoriApi.instance.getAudioId(url);
+    if(!id) throw new Error("Invalid streamable url");
+    this.id = id;
+    const data = (await BestdoriApi.instance.getSongInfo())[this.id];
     this.title = data.musicTitle[0];
     this.type = data.tag;
-    this.thumbnail = BestdoriApi.getThumbnail(this.id, data.jacketImage[0]);
-    this.artist = bestdori.allbandinfo[data.bandId].bandName[0];
+    this.thumbnail = BestdoriApi.instance.getThumbnailUrl(this.id, data.jacketImage[0]);
+    this.artist = (await BestdoriApi.instance.getBandInfo())[data.bandId].bandName[0];
     if(prefetched){
       this.lengthSeconds = prefetched.length;
       this.lyricist = prefetched.lyricist;
       this.composer = prefetched.composer;
       this.arranger = prefetched.arranger;
     }else{
-      const detailed = await BestdoriApi.getDetailedInfo(this.id);
+      const detailed = await BestdoriApi.instance.getDetailedSongInfo(this.id);
       this.lengthSeconds = Math.floor(detailed.length);
-      this.lyricist = detailed.lyricist[0];
-      this.composer = detailed.composer[0];
-      this.arranger = detailed.arranger[0];
+      this.lyricist = detailed.lyricist[0] || t("unknown");
+      this.composer = detailed.composer[0] || t("unknown");
+      this.arranger = detailed.arranger[0] || t("unknown");
     }
+
+    this.isPrivateSource = true;
+
     return this;
   }
 
   async fetch(): Promise<UrlStreamInfo>{
+    const paddedId = this.id.toString().padStart(3, "0");
     return {
       type: "url",
       streamType: "mp3",
-      url: "https://bestdori.com/assets/jp/sound/bgm" + padZero(this.id.toString(), 3) + "_rip/bgm" + padZero(this.id.toString(), 3) + ".mp3",
+      url: `https://bestdori.com/assets/jp/sound/bgm${paddedId}_rip/bgm${paddedId}.mp3`,
     };
   }
 
-  toField(){
+  toField(_: boolean){
+    const { t } = getCommandExecutionContext();
+
     const typeMap = {
       anime: "カバー",
       normal: "アニメ",
     };
+
     return [
       {
         name: "バンド名",
@@ -81,7 +86,7 @@ export class BestdoriS extends AudioSource<string> {
       },
       {
         name: "ジャンル",
-        value: typeMap[this.type],
+        value: typeMap[this.type as keyof typeof typeMap] || t("unknown"),
       },
       {
         name: "楽曲情報",
@@ -97,7 +102,7 @@ export class BestdoriS extends AudioSource<string> {
     return `アーティスト:\`${this.artist}\``;
   }
 
-  exportData(): exportableBestdori{
+  exportData(): BestdoriJsonFormat{
     return {
       url: this.url,
       length: this.lengthSeconds,
@@ -109,60 +114,97 @@ export class BestdoriS extends AudioSource<string> {
   }
 }
 
-export type exportableBestdori = exportableCustom & {
+export type BestdoriJsonFormat = AudioSourceBasicJsonFormat & {
   lyricist: string,
   composer: string,
   arranger: string,
 };
 
+type ApiCache<T> = {
+  lastUpdate: number,
+  cache: T,
+};
+
 /**
  * Bestdori ( https://bestdori.com )のAPIラッパ
  */
-export abstract class BestdoriApi {
+export class BestdoriApi {
+  private static _instance: BestdoriApi | null = null;
+
+  static get instance(): BestdoriApi{
+    return this._instance ??= new BestdoriApi();
+  }
+
+  private constructor(){}
+
+  private readonly BestdoriAllSongInfoEndPoint = "https://bestdori.com/api/songs/all.5.json";
+  private readonly BestdoriAllBandInfoEndPoint = "https://bestdori.com/api/bands/all.1.json";
+  private allsonginfoCache: ApiCache<BestdoriAllSongInfo> = null!;
+  private allbandinfoCache: ApiCache<BestdoriAllBandInfo> = null!;
+
+  private async setupData(){
+    const lastDateTime = new Date(new Date().toLocaleString(undefined, { timeZone: "Asia/Tokyo" }));
+    lastDateTime.setMinutes(0);
+    lastDateTime.setSeconds(0);
+    lastDateTime.setMilliseconds(0);
+    if(lastDateTime.getHours() > 15){
+      lastDateTime.setHours(15);
+    }else{
+      lastDateTime.setHours(0);
+    }
+
+    if(!this.allbandinfoCache || lastDateTime.getTime() - this.allbandinfoCache.lastUpdate > 0){
+      this.allbandinfoCache = {
+        cache: await candyget.json(this.BestdoriAllBandInfoEndPoint).then(({ body }) => body),
+        lastUpdate: Date.now(),
+      };
+    }
+    if(!this.allsonginfoCache || lastDateTime.getTime() - this.allsonginfoCache.lastUpdate > 0){
+      this.allsonginfoCache = {
+        cache: await candyget.json(this.BestdoriAllSongInfoEndPoint).then(({ body }) => body),
+        lastUpdate: Date.now(),
+      };
+    }
+  }
+
+  async getSongInfo(){
+    await this.setupData();
+    return this.allsonginfoCache.cache;
+  }
+
+  async getBandInfo(){
+    await this.setupData();
+    return this.allbandinfoCache.cache;
+  }
+
   /**
    * BestdoriのURLからIDを返します。BestdoriのURLでない場合にはnullが返されます。存在チェックは行っていません。
    * @param url BestdoriのURL
    * @returns BestdoriのID
    */
-  static getAudioId(url: string): number{
+  getAudioId(url: string): number | null {
     const match = url.match(/^https?:\/\/bestdori\.com\/info\/songs\/(?<Id>\d+)(\/.*)?$/);
     if(match){
-      return Number(match.groups.Id);
+      return Number(match.groups?.Id);
     }else{
       return null;
     }
   }
 
-  static async setupData(){
-    if(!bestdori.allbandinfo){
-      bestdori.allbandinfo = await candyget.json(BestdoriAllBandInfoEndPoint).then(({ body }) => body);
-    }
-    if(!bestdori.allsonginfo){
-      bestdori.allsonginfo = await candyget.json(BestdoriAllSongInfoEndPoint).then(({ body }) => body);
-    }
+  getAudioPage(id: number){
+    return `https://bestdori.com/info/songs/${id}`;
   }
 
-  static getAudioPage(id: number): string{
-    return "https://bestdori.com/info/songs/" + id;
-  }
-
-  static async getDetailedInfo(id: number): Promise<BestdoriDetailedSongInfo>{
+  async getDetailedSongInfo(id: number): Promise<BestdoriDetailedSongInfo>{
     const apiUrl = `https://bestdori.com/api/songs/${id.toString()}.json`;
     return candyget.json(apiUrl).then(({ body }) => body);
   }
 
-  static getThumbnail(id: number, jacketimage: string){
+  getThumbnailUrl(id: number, jacketimage: string){
     return `https://bestdori.com/assets/jp/musicjacket/musicjacket${Math.ceil(id / 10) * 10}_rip/assets-star-forassetbundle-startapp-musicjacket-musicjacket${Math.ceil(id / 10) * 10}-${jacketimage}-jacket.png`;
   }
 }
 
-export const BestdoriAllSongInfoEndPoint = "https://bestdori.com/api/songs/all.5.json";
-export const BestdoriAllBandInfoEndPoint = "https://bestdori.com/api/bands/all.1.json";
-class BestdoriData {
-  allsonginfo: BestdoriAllSongInfo = null;
-  allbandinfo: BestdoriAllBandInfo = null;
-}
-export const bestdori = new BestdoriData();
 export type BandID = number;
 export type SongID = number;
 

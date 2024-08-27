@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,7 +18,6 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { MessageEmbedBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
@@ -32,8 +31,8 @@ export default class NowPlaying extends BaseCommand {
       alias: ["今の曲", "nowplaying", "np"],
       unlist: false,
       category: "player",
-      argument: [{
-        type: "bool",
+      args: [{
+        type: "bool" as const,
         name: "detailed",
         required: false,
       }],
@@ -41,9 +40,11 @@ export default class NowPlaying extends BaseCommand {
       shouldDefer: false,
     });
   }
-  
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
+
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
     // そもそも再生状態じゃないよ...
     if(!context.server.player.isPlaying){
       message.reply(t("notPlaying")).catch(this.logger.error);
@@ -51,14 +52,16 @@ export default class NowPlaying extends BaseCommand {
     }
 
     // create progress bar
-    const _s = Math.floor(context.server.player.currentTime / 1000);
-    const _t = Number(context.server.player.currentAudioInfo.lengthSeconds);
-    const [min, sec] = Util.time.calcMinSec(_s);
-    const [tmin, tsec] = Util.time.calcMinSec(_t);
-    const info = context.server.player.currentAudioInfo;
+    const currentTimeSeconds = Math.floor(context.server.player.currentTime / 1000);
+    const totalDurationSeconds = Number(context.server.player.currentAudioInfo!.lengthSeconds * (
+      context.server.audioEffects.getEnabled("nightcore") ? 5 / 6 : 1
+    ));
+    const [min, sec] = Util.time.calcMinSec(currentTimeSeconds);
+    const [tmin, tsec] = Util.time.calcMinSec(totalDurationSeconds);
+    const info = context.server.player.currentAudioInfo!;
     let progressBar = "";
-    if(_t > 0){
-      const progress = Math.floor(_s / _t * 20);
+    if(totalDurationSeconds > 0){
+      const progress = Math.floor(currentTimeSeconds / totalDurationSeconds * 20);
       progressBar += "=".repeat(progress > 0 ? progress - 1 : 0);
       progressBar += "●";
       progressBar += "=".repeat(20 - progress);
@@ -67,21 +70,25 @@ export default class NowPlaying extends BaseCommand {
     // create embed
     const embed = new MessageEmbedBuilder()
       .setColor(getColor("NP"))
-      .setTitle(`${t("commands:nowplaying.nowPlayingSong")}:musical_note:`)
+      .setTitle(`${t("commands:nowplaying.nowPlayingSong")} :musical_note:`)
       .setDescription(
-        `[${info.title}](${info.url})\r\n${progressBar}${
+        (
+          info.isPrivateSource
+            ? info.title
+            : `[${info.title}](${info.url})`
+        )
+        + `\r\n${progressBar}${
           info.isYouTube() && info.isLiveStream
             ? `(${t("liveStream")})`
-            : ` \`${min}:${sec}/${_t === 0 ? `(${t("unknown")})` : `${tmin}:${tsec}\``}`
+            : ` \`${min}:${sec}/${totalDurationSeconds === 0 ? `(${t("unknown")})` : `${tmin}:${tsec}\``}`
         }`
-      )
-      .setFields(
-        ...info.toField(
-          ["long", "l", "verbose", "l", "true"].some(arg => context.args[0] === arg),
-          t
-        )
-      )
-      .addField(":link:URL", info.url);
+      );
+
+    if(!info.isPrivateSource){
+      embed
+        .setFields(...info.toField(["long", "l", "verbose", "l", "true"].some(arg => context.args[0] === arg)))
+        .addField(":link:URL", info.url);
+    }
 
     if(typeof info.thumbnail === "string"){
       embed.setThumbnail(info.thumbnail);

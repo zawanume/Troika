@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -21,10 +21,10 @@ import type { MusicBot } from "../bot";
 import * as discord from "oceanic.js";
 import { InteractionTypes } from "oceanic.js";
 
-import { useConfig } from "../config";
+import { getConfig } from "../config";
 import * as handlers from "../handlers";
 
-const config = useConfig();
+const config = getConfig();
 
 export async function onInteractionCreate(this: MusicBot, interaction: discord.AnyInteractionGateway){
   // コマンドインタラクションおよびコンポーネントインタラクション以外は処理せず終了
@@ -32,10 +32,16 @@ export async function onInteractionCreate(this: MusicBot, interaction: discord.A
     interaction.type !== InteractionTypes.APPLICATION_COMMAND
     && interaction.type !== InteractionTypes.MESSAGE_COMPONENT
     && interaction.type !== InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE
+    && interaction.type !== InteractionTypes.MODAL_SUBMIT
   ){
-    this.logger.debug(`Unknown interaction received: ${interaction.type}`);
+    this.logger.debug(`Unknown interaction received: ${(interaction as any).type}`);
     return;
   }
+
+  if(!interaction.member){
+    return;
+  }
+
   // メンテナンスモードでかつボット管理者以外なら終了
   if(this.maintenance && !config.isBotAdmin(interaction.member.id)){
     this.logger.debug("Interaction ignored due to mentenance mode");
@@ -46,13 +52,13 @@ export async function onInteractionCreate(this: MusicBot, interaction: discord.A
     return;
   }
   // レートリミットしてるなら終了
-  if(this.rateLimitController.isRateLimited(interaction.member.id)){
+  if(this.rateLimitController.pushEvent(interaction.member.id)){
     return;
   }
 
   // データ初期化
   const channel = interaction.channel as discord.TextChannel;
-  const server = this.initData(channel.guild.id, channel.id);
+  const server = this.upsertData(channel.guild.id, channel.id);
 
   // コマンドインタラクション
   switch(interaction.type){
@@ -78,5 +84,8 @@ export async function onInteractionCreate(this: MusicBot, interaction: discord.A
     case discord.InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE:
       handlers.handleAutoCompleteInteraction.call(this, interaction).catch(this.logger.error);
       break;
+
+    case discord.InteractionTypes.MODAL_SUBMIT:
+      handlers.handleModalSubmitInteraction.call(this, server, interaction).catch(this.logger.error);
   }
 }

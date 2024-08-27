@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -21,24 +21,23 @@ import type { MusicBot } from "../bot";
 import type { ComponentTypes } from "oceanic.js";
 import type * as discord from "oceanic.js";
 
-import { CommandManager } from "../Component/CommandManager";
+import { CommandManager } from "../Component/commandManager";
 import { CommandMessage } from "../Component/commandResolver/CommandMessage";
 
 export async function handleButtonInteraction(
   this: MusicBot,
   server: GuildDataContainer,
-  interaction: discord.ComponentInteraction<ComponentTypes.BUTTON, discord.AnyGuildTextChannel>,
+  interaction: discord.ComponentInteraction<ComponentTypes.BUTTON, discord.AnyTextableGuildChannel>,
 ){
   this.logger.info("received button interaction");
-  await interaction.deferUpdate();
 
   // コレクターで処理できるか？
-  if(this.collectors.interactionCreate(interaction)){
+  if(await this.collectors.onInteractionCreate(interaction)){
     return;
   }
 
   if(interaction.data.customID.startsWith("control_")){
-    let command: string = null;
+    let command: string = null!;
     switch(interaction.data.customID){
       case "control_rewind":
         command = "rewind";

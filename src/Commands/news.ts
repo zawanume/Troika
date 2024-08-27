@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 mtripg6666tdr
+ * Copyright 2021-2024 mtripg6666tdr
  * 
  * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
@@ -18,16 +18,15 @@
 
 import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
-import type { i18n } from "i18next";
 
 import { MessageActionRowBuilder, MessageButtonBuilder } from "@mtripg6666tdr/oceanic-command-resolver/helper";
 
-import * as ytpl from "ytpl";
-
 import { BaseCommand } from ".";
-import { useConfig } from "../config";
+import { Playlist } from "../AudioSource/youtube/playlist";
+import { getConfig } from "../config";
+import { DefaultAudioThumbnailURL } from "../definition";
 
-const config = useConfig();
+const config = getConfig();
 
 export default class News extends BaseCommand {
   constructor(){
@@ -40,11 +39,13 @@ export default class News extends BaseCommand {
     });
   }
 
-  async run(message: CommandMessage, context: CommandArgs, t: i18n["t"]){
-    context.server.updateBoundChannel(message);
-    context.server.joinVoiceChannel(message, {}, t).catch(this.logger.error);
+  @BaseCommand.updateBoundChannel
+  async run(message: CommandMessage, context: CommandArgs){
+    const { t } = context;
+
+    context.server.joinVoiceChannel(message, {}).catch(this.logger.error);
     // change news according to locale
-    let url: string = null;
+    let url: string = null!;
     switch(context.locale){
       case "en-US":
         url = Buffer.from(
@@ -108,6 +109,8 @@ export default class News extends BaseCommand {
       if(responseMessage){
         const panel = context.server.searchPanel.get(message.member.id);
 
+        if(!panel) return;
+
         collector.on("cancelSearch", interaction => {
           panel.destroy({ quiet: true }).catch(this.logger.error);
           interaction.createFollowup({
@@ -120,23 +123,20 @@ export default class News extends BaseCommand {
       }
       return;
     }
-    const searchPanel = context.server.searchPanel.create(message, t("commands:news.newsTopics"), t, true);
+    const searchPanel = context.server.searchPanel.create(message, t("commands:news.newsTopics"), true);
     if(!searchPanel) return;
     await searchPanel.consumeSearchResult(
-      ytpl.default(url, {
+      Playlist(url, {
         gl: config.country,
         hl: context.locale,
         limit: 20,
       }),
       ({ items }) => items.map(item => ({
-        title: item.title,
-        author: item.author.name,
-        description: `${t("length")}: ${item.duration}, ${t("channelName")}: ${item.author.name}`,
-        duration: item.duration,
-        thumbnail: item.thumbnails[0].url,
-        url: item.url,
+        ...item,
+        thumbnail: item.thumbnail || DefaultAudioThumbnailURL,
+        duration: item.durationText,
+        description: `${t("length")}: ${item.duration}, ${t("channelName")}: ${item.author}`,
       })),
-      t
     );
   }
 }

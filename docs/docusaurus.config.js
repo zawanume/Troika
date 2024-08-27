@@ -1,8 +1,9 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require('prism-react-renderer/themes/github');
-const darkCodeTheme = require('prism-react-renderer/themes/dracula');
+const { themes } = require("prism-react-renderer");
+const lightCodeTheme = themes.github;
+const darkCodeTheme = themes.dracula;
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -37,7 +38,26 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/tree/master/docs/',
+          editUrl: (context) => {
+            if(context.docPath.startsWith("guide/commands/")){
+              return undefined;
+            }
+            return `https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/edit/master/docs/${context.versionDocsDirPath}/${context.docPath}`
+          },
+          rehypePlugins: [
+            () => {
+              return async (tree, file) => {
+                const { visit } = await import("unist-util-visit");
+                visit(tree, "element", node => {
+                  if(node.tagName === "section" && node.properties.dataFootnotes){
+                    const txt = node.children[0].children[0];
+                    if(txt.value !== "Footnotes") throw new Error(`Unexpected text: ${txt.value}`);
+                    txt.value = "脚注"
+                  }
+                })
+              }
+            }
+          ]
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
@@ -99,6 +119,10 @@ const config = {
               {
                 label: 'ボット利用者向け機能ガイド',
                 to: '/docs/guide/overview'
+              },
+              {
+                label: 'リリースノート',
+                href: 'https://github.com/mtripg6666tdr/Discord-SimpleMusicBot/releases'
               }
             ],
           },
@@ -107,31 +131,36 @@ const config = {
             items: [
               {
                 label: 'Discord',
-                href: 'https://discord.com/invite/7DrAEXBMHe',
+                href: 'https://sr.usamyon.moe/8QZw',
               },
             ],
           },
           {
-            title: '開発',
+            title: '開発/翻訳',
             items: [
               {
                 label: 'GitHub',
                 href: 'https://github.com/mtripg6666tdr/Discord-SimpleMusicBot',
               },
+              {
+                label: 'Crowdin',
+                href: 'https://crowdin.com/project/discord-simplemusicbot'
+              },
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} mtripg6666tdr. Built with Docusaurus.`,
+        copyright: `© ${new Date().getFullYear()} mtripg6666tdr.`,
       },
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
+        additionalLanguages: ["diff", "bash", "json"],
       },
     }),
 
   stylesheets: [
-    'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP&display=swap'
-  ]
+    'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap'
+  ],
 };
 
 module.exports = config;
