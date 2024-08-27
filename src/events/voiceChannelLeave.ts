@@ -123,6 +123,12 @@ export async function onVoiceChannelLeave(
         server.player.once("disconnect", clearIdleTimeout);
       }*/
       await server.player.disconnect().catch(this.logger.error);
+      await this._client.rest.channels.createMessage(
+        server.boundTextChannel,
+        {
+          content: `:postbox: ${i18next.t("disconnected", { lng: server.locale })}`,
+        }
+      ).catch(this.logger.error);
     }
   }
 
