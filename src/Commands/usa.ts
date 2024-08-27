@@ -20,13 +20,12 @@ import type { CommandArgs } from ".";
 import type { CommandMessage } from "../Component/commandResolver/CommandMessage";
 
 import { BaseCommand } from ".";
-import { i18n } from "i18next";
 
 export default class Usa extends BaseCommand {
   constructor(){
     super({
       //name: "アメリカ",
-      alias: ["usa", "us","america","ソ連","アメリカ","アメリカ合衆国","合衆国"],
+      alias: ["usa", "us","america","アメリカ","アメリカ合衆国","合衆国"],
       //description: "アメリカ合衆国の国歌を再生します。",
       unlist: false,
       category: "player",
@@ -36,18 +35,18 @@ export default class Usa extends BaseCommand {
     });
   }
 
-  async run(message:CommandMessage, options:CommandArgs, t:i18n["t"]){
+  async run(message:CommandMessage, options:CommandArgs){
     options.server.updateBoundChannel(message);
     const server = options.server;
     // VCに入れない
-    if(!(await options.server.joinVoiceChannel(message, {replyOnFail:true}, t))) return;
+    if(!(await options.server.joinVoiceChannel(message, {replyOnFail:true}))) return;
     // 一時停止されてるね
     if(options.rawArgs === "" && server.player.isPaused){
       server.player.resume();
     }
 
     server.player.stop();
-    await server.playFromURL(message, "https://www.youtube.com/watch?v=30FOxaYyVg0", {}, t);
+    await server.playFromUrl(message, "https://www.youtube.com/watch?v=30FOxaYyVg0", {});
     await server.queue.removeAt(1);
   }
 }
