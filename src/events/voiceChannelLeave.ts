@@ -69,7 +69,7 @@ export async function onVoiceChannelLeave(
         }
       ).catch(this.logger.error);
     }else if(!config.twentyFourSeven.includes(oldChannel.id) && !config.alwaysTwentyFourSeven){
-      if(
+      /*if(
         server.player.isPlaying
         && server.player.currentAudioInfo!.lengthSeconds > 60
         && server.player.currentAudioInfo!.lengthSeconds - server.player.currentTime / 1000 < 10
@@ -121,7 +121,8 @@ export async function onVoiceChannelLeave(
         const clearIdleTimeout = () => clearTimeout(timer);
         server.player.once("playCalled", clearIdleTimeout);
         server.player.once("disconnect", clearIdleTimeout);
-      }
+      }*/
+      await server.player.disconnect().catch(this.logger.error);
     }
   }
 
