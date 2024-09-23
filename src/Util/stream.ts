@@ -16,26 +16,18 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { MusicBot } from "../bot";
-import type * as discord from "oceanic.js";
+import type { Readable } from "stream";
 
-import { onVoiceChannelJoin, onVoiceChannelLeave } from ".";
-
-export async function onVoiceChannelSwitch(
-  this: MusicBot,
-  member: discord.Member,
-  newChannel: discord.VoiceChannel | discord.StageChannel | discord.Uncached,
-  oldChannel: discord.VoiceChannel | discord.StageChannel | discord.Uncached
-) {
-  if (!("guild" in newChannel)) return;
-
-  onVoiceChannelJoin.call(this, member, newChannel).catch(this.logger.error);
-
-  if (member.id === this.client.user.id) {
-    if (this.guildData.has(member.guild.id)) {
-      this.getData(member.guild.id)!.connectingVoiceChannel = member.voiceState!.channel!;
-    }
-  } else {
-    onVoiceChannelLeave.call(this, member, oldChannel).catch(this.logger.error);
+export function destroyStream(stream: Readable, error?: Error) {
+  if (!stream.destroyed) {
+    // if stream._destroy was overwritten, callback might not be called so make sure to be called.
+    const originalDestroy = stream._destroy;
+    stream._destroy = function(er, callback) {
+      originalDestroy.apply(this, [er, () => {}]);
+      callback.apply(this, [er]);
+    };
+    stream.destroy(error);
+  } else if (error) {
+    stream.emit("error", error);
   }
 }

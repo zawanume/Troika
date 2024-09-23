@@ -21,10 +21,10 @@ import type { ReadableStreamInfo, StreamInfo, UrlStreamInfo } from "../../audios
 import type { Readable } from "stream";
 
 import * as ytdl from "@distube/ytdl-core";
+import { safeTraverse } from "safe-traverse";
 
 import { Strategy } from "./base";
 import { YouTubeJsonFormat } from "..";
-import { unsafeTraverseFrom } from "../../../Util";
 import { getConfig } from "../../../config";
 import { SecondaryUserAgent } from "../../../definition";
 import { createChunkedDistubeYTStream, createRefreshableYTLiveStream } from "../stream";
@@ -41,11 +41,11 @@ const poTokenExperiments = ["51217476", "51217102"];
 export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl.videoInfo> {
   protected agent = config.proxy ? ytdl.createProxyAgent({ uri: config.proxy }) : undefined;
 
-  get cacheType(){
+  get cacheType() {
     return distubeYtdlCore;
   }
 
-  async getInfo(url: string){
+  async getInfo(url: string) {
     this.logStrategyUsed();
 
     const info = await ytdl.getInfo(url, {
@@ -55,7 +55,7 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
 
     const nop = this.validateInfoExperiments(info);
 
-    if(!nop){
+    if (!nop) {
       throw new Error("Detected broken formats.");
     }
 
@@ -79,20 +79,20 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
 
     let info: ytdl.videoInfo = null!;
 
-    for(let i = 0; i < 3; i++){
+    for (let i = 0; i < 3; i++) {
       info = availableCache || await ytdl.getInfo(url, {
         lang: config.defaultLanguage,
       });
 
-      if(this.validateInfoExperiments(info)) break;
+      if (this.validateInfoExperiments(info)) break;
 
-      unsafeTraverseFrom(ytdl)
-        .getProperty("cache")
-        .select(obj => Object.values<Map<string, any>>(obj))
-        .execute("forEach")(s => s.clear());
+      safeTraverse(ytdl)
+        .get("cache")
+        .values()
+        .call("clear", (s: Map<string, any>) => s.clear());
     }
 
-    if(!this.validateInfoExperiments(info)){
+    if (!this.validateInfoExperiments(info)) {
       throw new Error("Detected broken formats.");
     }
 
@@ -121,7 +121,7 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
       }) as YouTubeJsonFormat),
     };
 
-    if(forceUrl){
+    if (forceUrl) {
       return {
         ...partialResult,
         stream: {
@@ -132,15 +132,12 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
             ? "webm/opus"
             : "unknown",
         } as UrlStreamInfo,
-        cache: {
-          type: distubeYtdlCore,
-          data: info,
-        },
+        cache: null!,
       };
-    }else{
+    } else {
       const readable: Readable = info.videoDetails.liveBroadcastDetails && info.videoDetails.liveBroadcastDetails.isLiveNow
         ? createRefreshableYTLiveStream(info, url, { format, lang: config.defaultLanguage })
-        : createChunkedDistubeYTStream(info, format, { lang: config.defaultLanguage }, 512 * 1024);
+        : createChunkedDistubeYTStream(info, format, { lang: config.defaultLanguage });
 
       return {
         ...partialResult,
@@ -152,15 +149,12 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
               ? "webm/opus"
               : "unknown",
         } as ReadableStreamInfo,
-        cache: {
-          type: distubeYtdlCore,
-          data: info,
-        },
+        cache: null!,
       };
     }
   }
 
-  protected mapToExportable(url: string, info: ytdl.videoInfo){
+  protected mapToExportable(url: string, info: ytdl.videoInfo) {
     return {
       url,
       title: info.videoDetails.title,
@@ -179,21 +173,21 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
 
   extractExperiments(info: ytdl.videoInfo): string[] {
     // ref: https://github.com/yt-dlp/yt-dlp/pull/10456/files
-    const experiments = unsafeTraverseFrom(info)
-      .getProperty("response")
-      .getProperty("responseContext")
-      .getProperty("serviceTrackingParams")
-      .select(v => v.find((d: any) => d.service === "GFEEDBACK"))
-      .getProperty("params")
-      .select(v => v.find((d: any) => d.key === "e"))
-      .getProperty("value")
-      .select<string[]>(v => v.split(","))
-      .value;
+
+    const experiments = safeTraverse(info)
+      .expect(_ => _.response.responseContext.serviceTrackingParams)
+      .validate(_ => !!_.find)
+      .select(_ => _.find((d: any) => d.service === "GFEEDBACK"))
+      .get<any>("params")
+      .validate(_ => !!_.find)
+      .select(_ => _.find((d: any) => d.key === "e"))
+      .safeExpect(_ => _.value.split(","))
+      .get() as string[];
 
     return experiments || [];
   }
 
-  validateInfoExperiments(info: ytdl.videoInfo){
+  validateInfoExperiments(info: ytdl.videoInfo) {
     const experiments = this.extractExperiments(info);
 
     this.logger.trace("Experiments", experiments.join(", "));
@@ -201,7 +195,7 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
     return !poTokenExperiments.some(expId => experiments.includes(expId));
   }
 
-  validateCacheExperiments(cache: Cache<distubeYtdlCore, ytdl.videoInfo>){
+  validateCacheExperiments(cache: Cache<distubeYtdlCore, ytdl.videoInfo>) {
     return this.validateInfoExperiments(cache.data);
   }
 }

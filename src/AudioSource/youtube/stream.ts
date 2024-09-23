@@ -27,7 +27,7 @@ import { getLogger } from "../../logger";
 
 const logger = getLogger("AudioSource:YouTubeStream");
 
-export function createChunkedYTStream(info: ytdl.videoInfo, format: ytdl.videoFormat, options: ytdl.downloadOptions, chunkSize: number = 512 * 1024){
+export function createChunkedYTStream(info: ytdl.videoInfo, format: ytdl.videoFormat, options: ytdl.downloadOptions, chunkSize: number = 512 * 1024) {
   return createFragmentalDownloadStream(
     (start, end) => ytdl.downloadFromInfo(info, {
       format,
@@ -41,21 +41,40 @@ export function createChunkedYTStream(info: ytdl.videoInfo, format: ytdl.videoFo
   );
 }
 
-export function createChunkedDistubeYTStream(info: distubeYtdl.videoInfo, format: distubeYtdl.videoFormat, options: distubeYtdl.downloadOptions, chunkSize: number = 512 * 1024){
-  return createFragmentalDownloadStream(
-    (start, end) => distubeYtdl.downloadFromInfo(info, {
-      format,
-      ...options,
-      range: { start, end },
-    }),
+export function createChunkedDistubeYTStream(
+  info: distubeYtdl.videoInfo,
+  format: distubeYtdl.videoFormat,
+  options: distubeYtdl.downloadOptions,
+  chunkSize: number = 8 * 1024 * 1024, // 8MB
+) {
+  const refreshInfo = async () => {
+    info = await distubeYtdl.getInfo(info.videoDetails.video_url);
+
+    const newFormat = info.formats.find(f => f.itag === format.itag);
+    if (!newFormat) {
+      stream.destroy(new Error("Failed to refresh the format"));
+      return;
+    }
+
+    format = newFormat;
+  };
+
+  const stream = createFragmentalDownloadStream(
+    async (start, end) => {
+      await refreshInfo();
+      return distubeYtdl.downloadFromInfo(info, { format, ...options, range: { start, end }, dlChunkSize: 0 });
+    },
     {
       chunkSize,
       contentLength: Number(format.contentLength),
+      pulseDownload: true,
     }
   );
+
+  return stream;
 }
 
-export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl.videoInfo, url: string, options: ytdl.downloadOptions | distubeYtdl.downloadOptions, distube: boolean = false){
+export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl.videoInfo, url: string, options: ytdl.downloadOptions | distubeYtdl.downloadOptions, distube: boolean = false) {
   // set timeout to any miniget stream
   const setStreamNetworkTimeout = (_stream: Readable) => {
     _stream.on("response", (message: IncomingMessage) => {
@@ -72,19 +91,19 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl
 
   // start to download the live stream from the provided information (info object or url string)
   const downloadLiveStream = async (targetInfo: ytdl.videoInfo | distubeYtdl.videoInfo | string) => {
-    if(typeof targetInfo === "string"){
+    if (typeof targetInfo === "string") {
       targetInfo = await ytdl.getInfo(targetInfo);
       options.format = ytdl.chooseFormat(targetInfo.formats, { isHLS: true } as ytdl.chooseFormatOptions);
     }
 
-    if(distube){
+    if (distube) {
       assertIs<distubeYtdl.videoInfo>(targetInfo);
       assertIs<distubeYtdl.downloadOptions>(options);
 
       return distubeYtdl.downloadFromInfo(targetInfo, Object.assign({
         liveBuffer: 10000,
       }, options));
-    }else{
+    } else {
       assertIs<ytdl.videoInfo>(targetInfo);
       assertIs<ytdl.downloadOptions>(options);
 
@@ -97,9 +116,9 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl
   // handle errors occurred by the current live stream
   const onError = (er: Error) => {
     console.error(er);
-    if(er.message === "ENOTFOUND"){
+    if (er.message === "ENOTFOUND") {
       refreshStream().catch(onError);
-    }else{
+    } else {
       destroyCurrentStream(er);
       stream.destroy(er);
     }
@@ -107,7 +126,7 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl
 
   // destroy the current stream safely
   const destroyCurrentStream = (er?: Error) => {
-    if(currentStream){
+    if (currentStream) {
       currentStream.removeAllListeners("error");
       currentStream.on("error", () => {});
       currentStream.destroy(er);
@@ -118,8 +137,8 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl
   let refreshing = false;
   // re-create new stream to refresh instance
   const refreshStream = async () => {
-    if(refreshing) return;
-    try{
+    if (refreshing) return;
+    try {
       refreshing = true;
       logger.debug("preparing new stream");
       const newStream = await downloadLiveStream(url);
@@ -135,7 +154,7 @@ export function createRefreshableYTLiveStream(info: ytdl.videoInfo | distubeYtdl
       logger.debug("piped new stream");
       refreshing = false;
     }
-    catch(e){
+    catch (e) {
       stream.destroy(e);
     }
   };

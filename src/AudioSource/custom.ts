@@ -16,30 +16,33 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { AudioSourceBasicJsonFormat, UrlStreamInfo } from ".";
+import type { AudioSourceBasicJsonFormat, ReadableStreamInfo, StreamInfo, UrlStreamInfo } from ".";
+
+import candyget from "candyget";
 
 import { AudioSource } from "./audiosource";
 import { getCommandExecutionContext } from "../Commands";
-import { getResourceTypeFromUrl, retrieveRemoteAudioInfo } from "../Util";
+import { createFragmentalDownloadStream, getResourceTypeFromUrl, retrieveRemoteAudioInfo } from "../Util";
+import { DefaultUserAgent } from "../definition";
 
 export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat> {
-  constructor(){
+  constructor() {
     super({ isCacheable: false });
   }
 
-  async init(url: string, prefetched: AudioSourceBasicJsonFormat | null){
+  async init(url: string, prefetched: AudioSourceBasicJsonFormat | null) {
     const { t } = getCommandExecutionContext();
 
-    if(prefetched){
+    if (prefetched) {
       this.title = prefetched.title || t("audioSources.customStream");
       this.url = url;
       this.lengthSeconds = prefetched.length;
-    }else if(getResourceTypeFromUrl(url) !== "none"){
+    } else if (getResourceTypeFromUrl(url) !== "none") {
       this.url = url;
       const info = await retrieveRemoteAudioInfo(url);
       this.title = info.displayTitle || this.extractFilename() || t("audioSources.customStream");
       this.lengthSeconds = info.lengthSeconds || 0;
-    }else{
+    } else {
       throw new Error(t("audioSources.invalidStream"));
     }
 
@@ -48,16 +51,38 @@ export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat
     return this;
   }
 
-  async fetch(): Promise<UrlStreamInfo>{
+  async fetch(): Promise<StreamInfo> {
+    const canBeWithVideo = getResourceTypeFromUrl(this.url) === "video";
+
+    if (!canBeWithVideo) {
+      const { statusCode, headers } = await candyget.head(this.url, {
+        headers: {
+          "User-Agent": DefaultUserAgent,
+        },
+      });
+
+      if (200 <= statusCode && statusCode < 300 && headers["content-length"] && headers["accept-ranges"]?.includes("bytes")) {
+        return {
+          type: "readable",
+          stream: createFragmentalDownloadStream(this.url, {
+            chunkSize: 1 * 1024 * 1024,
+            contentLength: Number(headers["content-length"]),
+            userAgent: DefaultUserAgent,
+          }),
+          streamType: "unknown",
+        } satisfies ReadableStreamInfo;
+      }
+    }
+
     return {
       type: "url",
       url: this.url,
       streamType: "unknown",
-      canBeWithVideo: getResourceTypeFromUrl(this.url) === "video",
-    };
+      canBeWithVideo,
+    } satisfies UrlStreamInfo;
   }
 
-  toField(_: boolean){
+  toField(_: boolean) {
     const { t } = getCommandExecutionContext();
 
     return [
@@ -72,11 +97,11 @@ export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat
     ];
   }
 
-  npAdditional(){
+  npAdditional() {
     return "";
   }
 
-  exportData(): AudioSourceBasicJsonFormat{
+  exportData(): AudioSourceBasicJsonFormat {
     return {
       url: this.url,
       length: this.lengthSeconds,
@@ -84,7 +109,7 @@ export class CustomStream extends AudioSource<string, AudioSourceBasicJsonFormat
     };
   }
 
-  private extractFilename(){
+  private extractFilename() {
     const url = new URL(this.url);
     return url.pathname.split("/").at(-1);
   }

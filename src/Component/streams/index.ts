@@ -24,6 +24,7 @@ import { opus } from "prism-media";
 
 import { transformThroughFFmpeg } from "./ffmpeg";
 import { createPassThrough, downloadAsReadable } from "../../Util";
+import { destroyStream } from "../../Util/stream";
 import { getLogger } from "../../logger";
 
 type PlayableStreamInfo = {
@@ -69,12 +70,12 @@ export async function resolveStreamToPlayable(
   /** shouldDownloadがtrueの場合は常にReadableStreamInfo。それ以外の場合は、UrlStreamInfoの可能性もあります */
   const streamInfo = shouldDownload ? convertStreamInfoToReadableStreamInfo(originalStreamInfo) : originalStreamInfo;
 
-  if(
+  if (
     (streamInfo.streamType === "webm/opus" || streamInfo.streamType === "ogg/opus")
     && !seekEnabled
     && !effectEnabled
     && !volumeTransformEnabled
-  ){
+  ) {
     // Ogg / Webm --(Demuxer)--> Opus
     logger.info(`stream edges: raw(${originalStreamInfo.streamType}) (no conversion)`);
     return {
@@ -88,12 +89,12 @@ export async function resolveStreamToPlayable(
   const shouldTransformIntoPCM = volumeTransformEnabled;
   const shouldTransformThroughFFmpeg = !shouldDownload || seekEnabled || effectEnabled;
 
-  if(shouldTransformIntoPCM){
+  if (shouldTransformIntoPCM) {
     const pcmStream = createPassThrough();
     let pcmCost = 0;
     const streams: Readable[] = [];
 
-    if(!shouldTransformThroughFFmpeg && (streamInfo.streamType === "webm/opus" || streamInfo.streamType === "ogg/opus")){
+    if (!shouldTransformThroughFFmpeg && (streamInfo.streamType === "webm/opus" || streamInfo.streamType === "ogg/opus")) {
       // Webm/Ogg --(Demuxer)--> Opus --(Decoder)--> PCM
       //                1                  1.5
       // Total: 2.5
@@ -120,7 +121,7 @@ export async function resolveStreamToPlayable(
 
       streams.push(rawStream, demuxer, decoder, pcmStream);
       pcmCost += 2.5;
-    }else{
+    } else {
       // Unknown --(FFmpeg)--> PCM
       //              2
       logger.info(`stream edges: raw(${streamInfo.streamType || "unknown"}) --(FFmpeg) --> PCM`);
@@ -131,7 +132,7 @@ export async function resolveStreamToPlayable(
         .pipe(pcmStream)
         .once("close", () => destroyStream(ffmpeg));
 
-      if(streamInfo.type === "readable"){
+      if (streamInfo.type === "readable") {
         streams.push(streamInfo.stream);
       }
       streams.push(ffmpeg, pcmStream);
@@ -144,7 +145,7 @@ export async function resolveStreamToPlayable(
       streams,
       cost: pcmCost + 0.5 + 1.5,
     };
-  }else{
+  } else {
     // Unknown --(FFmpeg)--> Ogg/Opus
     logger.info(`stream edges: raw(${streamInfo.streamType || "unknown"}) --(FFmpeg)--> Webm/Ogg`);
     const ffmpegOutput = streamInfo.streamType === "webm/opus" ? "webm" : "ogg";
@@ -166,22 +167,8 @@ export async function resolveStreamToPlayable(
   }
 }
 
-export function destroyStream(stream: Readable, error?: Error){
-  if(!stream.destroyed){
-    // if stream._destroy was overwritten, callback might not be called so make sure to be called.
-    const originalDestroy = stream._destroy;
-    stream._destroy = function(er, callback){
-      originalDestroy.apply(this, [er, () => {}]);
-      callback.apply(this, [er]);
-    };
-    stream.destroy(error);
-  }else if(error){
-    stream.emit("error", error);
-  }
-}
-
-function convertStreamInfoToReadableStreamInfo(streamInfo: UrlStreamInfo | ReadableStreamInfo): ReadableStreamInfo{
-  if(streamInfo.type === "readable"){
+function convertStreamInfoToReadableStreamInfo(streamInfo: UrlStreamInfo | ReadableStreamInfo): ReadableStreamInfo {
+  if (streamInfo.type === "readable") {
     return streamInfo;
   }
 

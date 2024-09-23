@@ -21,7 +21,7 @@ import type { ExportedAudioEffect } from "../audioEffectManager";
 
 import { FFmpeg } from "prism-media";
 
-import { destroyStream } from ".";
+import { destroyStream } from "../../Util/stream";
 import { DefaultUserAgent } from "../../definition";
 import { getLogger } from "../../logger";
 
@@ -32,8 +32,6 @@ export const FFmpegDefaultNetworkArgs = [
   "-reconnect_on_http_error", "4xx,5xx",
   "-reconnect_delay_max", "30",
 ] as const;
-
-const logger = getLogger("FFmpeg");
 
 export function transformThroughFFmpeg(
   readable: StreamInfo,
@@ -46,9 +44,13 @@ export function transformThroughFFmpeg(
     bitrate: number,
     effects: ExportedAudioEffect,
     seek: number,
-    output: "webm"|"ogg"|"pcm",
+    output: "webm" | "ogg" | "pcm",
   }
-){
+) {
+  const logger = getLogger("FFmpeg", true);
+  const id = Date.now();
+  logger.addContext("id", id);
+
   const ffmpegNetworkArgs = readable.type === "url" ? [
     ...FFmpegDefaultNetworkArgs,
     "-user_agent", readable.userAgent || DefaultUserAgent,
@@ -62,20 +64,20 @@ export function transformThroughFFmpeg(
   const outputArgs: string[] = [];
   const bitrateArgs: string[] = [];
 
-  if(
+  if (
     effects.args.length === 0
     && ((output === "webm" && readable.streamType === "webm/opus") || (output === "ogg" && readable.streamType === "ogg/opus"))
-  ){
+  ) {
     outputArgs.push(
       "-f", output === "ogg" ? "opus" : "webm",
       "-acodec", "copy",
     );
-  }else if(output === "ogg" || output === "webm"){
+  } else if (output === "ogg" || output === "webm") {
     outputArgs.push(
       "-f", output === "ogg" ? "opus" : "webm",
       "-acodec", "libopus",
     );
-  }else{
+  } else {
     outputArgs.push(
       "-f", "s16le",
       "-ar", "48000",
@@ -83,7 +85,7 @@ export function transformThroughFFmpeg(
     );
   }
 
-  if(!effects.shouldDisableVbr){
+  if (!effects.shouldDisableVbr) {
     bitrateArgs.push(
       "-vbr", "on",
     );
@@ -109,7 +111,7 @@ export function transformThroughFFmpeg(
     logger.debug(`FFmpeg process exited (code: ${code}, signal: ${signal})`);
     ffmpeg.emit("close");
   });
-  if(readable.type === "readable"){
+  if (readable.type === "readable") {
     readable.stream
       .on("error", e => destroyStream(ffmpeg, e))
       .pipe(ffmpeg)
