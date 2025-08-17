@@ -1,18 +1,18 @@
 /*
- * Copyright 2021-2024 mtripg6666tdr
- * 
- * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
+ * Copyright 2021-2025 mtripg6666tdr
+ *
+ * This file is part of mtripg6666tdr/Discord-SimpleMusicBot.
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
- * 
- * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by the Free Software Foundation, 
+ *
+ * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  *
- * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful, 
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot. 
+ * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot.
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -50,12 +50,11 @@ export function stringifyObject(obj: any): string {
   } else if (obj instanceof Error) {
     return `${obj.name}: ${obj.message}\n${obj.stack || "no stacks"}`;
   } else if (obj["message"]) {
-    return obj.message;
+    return stringifyObject(obj.message);
   } else {
     try {
       return JSON.stringify(obj);
-    }
-    catch {
+    } catch {
       return Object.prototype.toString.call(obj);
     }
   }
@@ -169,7 +168,7 @@ export function getResourceTypeFromUrl(url: string | null, { checkResponse = fal
   }
 
   return requestHead(url).then(({ headers }) =>
-    headers["content-type"]?.startsWith(`${typeInferredFromUrl}/`) ? typeInferredFromUrl : "none"
+    headers["content-type"]?.startsWith(`${typeInferredFromUrl}/`) ? typeInferredFromUrl : "none",
   );
 }
 
@@ -261,7 +260,7 @@ export async function retrieveRemoteAudioInfo(url: string): Promise<RemoteAudioI
       match.groups!.length
         .split(":")
         .map(n => Number(n))
-        .reduce((prev, current) => prev * 60 + current)
+        .reduce((prev, current) => prev * 60 + current),
     ) || null;
   }
 
@@ -365,7 +364,7 @@ export function normalizeText(rawText: string) {
  * @param predicate 待機完了かどうかを判定する関数
  * @param timeout 待機時間の最大値（タイムアウト時間）。設定しない場合はInfinityとします。
  * @param options 追加の設定
- * @returns 
+ * @returns
  */
 export function waitForEnteringState(predicate: () => boolean, timeout: number = 10 * 1000, options?: {
   /**
@@ -398,8 +397,7 @@ export function waitForEnteringState(predicate: () => boolean, timeout: number =
         clearInterval(ticker);
         if (rejectOnTimeout) {
           reject(`target predicate has not return true in time (${timeout}ms) and timed out`);
-        }
-        else {
+        } else {
           resolve(Date.now() - startTime);
         }
       }
@@ -408,7 +406,6 @@ export function waitForEnteringState(predicate: () => boolean, timeout: number =
 }
 
 export function createDebounceFunctionsFactroy<Key>(func: (key: Key) => void, debounceDelay: number) {
-  // eslint-disable-next-line func-call-spacing
   const functionsStore = new Map<Key, () => void>();
   return (key: Key) => {
     if (functionsStore.has(key)) {
@@ -478,6 +475,7 @@ export function createFragmentalDownloadStream(
 
       logger.info(`Stream was created as a single stream. (buffer: ${chunkSize} / content length: ${contentLength})`);
     } else {
+      let onCloseHandler = () => {};
       const pipeNextStream = async () => {
         current++;
 
@@ -499,6 +497,10 @@ export function createFragmentalDownloadStream(
 
         let pulseBuffer: PassThrough | null = null;
 
+        if (onCloseHandler) {
+          stream.off("close", onCloseHandler);
+        }
+
         if (pulseDownload) {
           pulseBuffer = createPassThrough({ highWaterMark: Math.floor(chunkSize * 1.2) });
 
@@ -511,7 +513,7 @@ export function createFragmentalDownloadStream(
             .on("error", er => destroyStream(stream, er))
             .once("close", () => destroyStream(nextStream))
             .pipe(stream, { end: end === undefined })
-            .once("close", () => destroyStream(pulseBuffer!));
+            .once("close", onCloseHandler = () => destroyStream(pulseBuffer!));
         } else {
           nextStream
             .on("request", logger.trace)
@@ -519,7 +521,7 @@ export function createFragmentalDownloadStream(
             .on("end", () => logger.trace("Origin stream ended"))
             .on("error", er => destroyStream(stream, er))
             .pipe(stream, { end: end === undefined })
-            .once("close", () => destroyStream(nextStream));
+            .once("close", onCloseHandler = () => destroyStream(nextStream));
         }
 
         if (end !== undefined) {
@@ -540,8 +542,7 @@ export function createFragmentalDownloadStream(
 export function requireIfAny(id: string): unknown {
   try {
     return require(id);
-  }
-  catch (e) {
+  } catch (e) {
     const logger = getLogger("Util");
 
     logger.info(`The module "${id}" couldn't be loaded because of the error: ${stringifyObject(e)}`);

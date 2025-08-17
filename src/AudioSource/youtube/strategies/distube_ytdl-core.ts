@@ -1,21 +1,22 @@
 /*
- * Copyright 2021-2024 mtripg6666tdr
- * 
- * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
+ * Copyright 2021-2025 mtripg6666tdr
+ *
+ * This file is part of mtripg6666tdr/Discord-SimpleMusicBot.
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
- * 
- * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by the Free Software Foundation, 
+ *
+ * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  *
- * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful, 
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot. 
+ * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot.
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { YouTubeJsonFormat } from "..";
 import type { Cache, StrategyFetchResult } from "./base";
 import type { ReadableStreamInfo, StreamInfo, UrlStreamInfo } from "../../audiosource";
 import type { Readable } from "stream";
@@ -24,7 +25,6 @@ import * as ytdl from "@distube/ytdl-core";
 import { safeTraverse } from "safe-traverse";
 
 import { Strategy } from "./base";
-import { YouTubeJsonFormat } from "..";
 import { getConfig } from "../../../config";
 import { SecondaryUserAgent } from "../../../definition";
 import { createChunkedDistubeYTStream, createRefreshableYTLiveStream } from "../stream";
@@ -86,6 +86,8 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
 
       if (this.validateInfoExperiments(info)) break;
 
+      this.logger.warn("Detected broken formats; retrying...");
+
       safeTraverse(ytdl)
         .get("cache")
         .values()
@@ -96,14 +98,16 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
       throw new Error("Detected broken formats.");
     }
 
-    const format = ytdl.chooseFormat(info.formats, info.videoDetails.liveBroadcastDetails?.isLiveNow ? {
-      filter: undefined,
-      quality: undefined,
-      isHLS: false,
-    } as ytdl.chooseFormatOptions : {
-      filter: "audioonly",
-      quality: "highestaudio",
-    });
+    const format = ytdl.chooseFormat(info.formats, info.videoDetails.liveBroadcastDetails?.isLiveNow
+      ? {
+        filter: undefined,
+        quality: undefined,
+        isHLS: false,
+      } as ytdl.chooseFormatOptions
+      : {
+        filter: "audioonly",
+        quality: "highestaudio",
+      });
 
     this.logger.info(`format: ${format.itag}, bitrate: ${format.bitrate}bps, audio codec:${format.audioCodec}, container: ${format.container}`);
 
@@ -132,7 +136,10 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
             ? "webm/opus"
             : "unknown",
         } as UrlStreamInfo,
-        cache: null!,
+        cache: {
+          type: distubeYtdlCore,
+          data: info,
+        },
       };
     } else {
       const readable: Readable = info.videoDetails.liveBroadcastDetails && info.videoDetails.liveBroadcastDetails.isLiveNow
@@ -149,7 +156,10 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
               ? "webm/opus"
               : "unknown",
         } as ReadableStreamInfo,
-        cache: null!,
+        cache: {
+          type: distubeYtdlCore,
+          data: info,
+        },
       };
     }
   }
@@ -190,7 +200,7 @@ export class distubeYtdlCoreStrategy extends Strategy<distubeYtdlCoreCache, ytdl
   validateInfoExperiments(info: ytdl.videoInfo) {
     const experiments = this.extractExperiments(info);
 
-    this.logger.trace("Experiments", experiments.join(", "));
+    // this.logger.trace("Experiments", experiments.join(", "));
 
     return !poTokenExperiments.some(expId => experiments.includes(expId));
   }

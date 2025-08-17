@@ -1,23 +1,23 @@
 /*
- * Copyright 2021-2024 mtripg6666tdr
- * 
- * This file is part of mtripg6666tdr/Discord-SimpleMusicBot. 
+ * Copyright 2021-2025 mtripg6666tdr
+ *
+ * This file is part of mtripg6666tdr/Discord-SimpleMusicBot.
  * (npm package name: 'discord-music-bot' / repository url: <https://github.com/mtripg6666tdr/Discord-SimpleMusicBot> )
- * 
- * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by the Free Software Foundation, 
+ *
+ * mtripg6666tdr/Discord-SimpleMusicBot is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
  *
- * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful, 
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ * mtripg6666tdr/Discord-SimpleMusicBot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot. 
+ * You should have received a copy of the GNU General Public License along with mtripg6666tdr/Discord-SimpleMusicBot.
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { CacheController } from "../Component/cacheController";
 import type { KnownAudioSourceIdentifer } from "../Component/queueManager";
-import type { SourceCache } from "../Component/sourceCache";
 
 import * as AudioSource from ".";
 import { getResourceTypeFromUrl } from "../Util";
@@ -34,7 +34,7 @@ type AudioSourceBasicInfo = {
 const { isDisabledSource } = getConfig();
 const logger = getLogger("Resolver");
 
-export async function resolve(info: AudioSourceBasicInfo, cacheManager: SourceCache, preventSourceCache: boolean) {
+export async function resolve(info: AudioSourceBasicInfo, cacheManager: CacheController, preventSourceCache: boolean) {
   let basicInfo: AudioSource.AudioSource<any, any> | null = null;
 
   const type = info.type;
@@ -43,11 +43,11 @@ export async function resolve(info: AudioSourceBasicInfo, cacheManager: SourceCa
   let gotData = info.knownData;
   let fromPersistentCache = !!gotData;
 
-  if (cacheManager.hasSource(url)) {
+  if (cacheManager.audioSource.has(url)) {
     logger.debug("cache found");
-    return cacheManager.getSource(url);
-  } else if (!gotData && cacheManager.hasExportable(url)) {
-    gotData = await cacheManager.getExportable(url);
+    return cacheManager.audioSource.get(url);
+  } else if (!gotData && cacheManager.exportableAudioSource.has(url)) {
+    gotData = await cacheManager.exportableAudioSource.get(url);
     if (gotData) {
       logger.debug("exportable cache found");
       fromPersistentCache = true;
@@ -60,10 +60,10 @@ export async function resolve(info: AudioSourceBasicInfo, cacheManager: SourceCa
     logger.debug("initializing source from scratch");
   }
 
-  if (!isDisabledSource("youtube") && (type === "youtube" || type === "unknown" && AudioSource.YouTube.validateURL(url))) {
+  if (!isDisabledSource("youtube") && ((type === "youtube" || type === "unknown") && AudioSource.YouTube.validateURL(url))) {
     // youtube
     basicInfo = await AudioSource.initYouTube(url, gotData as AudioSource.YouTubeJsonFormat, cache);
-  } else if (!isDisabledSource("custom") && (type === "custom" || type === "unknown" && getResourceTypeFromUrl(url) !== "none")) {
+  } else if (!isDisabledSource("custom") && ((type === "custom" || type === "unknown") && getResourceTypeFromUrl(url) !== "none")) {
     // カスタムストリーム
     basicInfo = await new AudioSource.CustomStream().init(url, info.knownData);
   } else if (!isDisabledSource("soundcloud") && (type === "soundcloud" || AudioSource.SoundCloudS.validateUrl(url))) {
@@ -94,7 +94,7 @@ export async function resolve(info: AudioSourceBasicInfo, cacheManager: SourceCa
   if (preventSourceCache) {
     logger.debug("Skipping source-caching due to private source");
   } else if (basicInfo && !isNaN(basicInfo.lengthSeconds) && basicInfo.isCachable) {
-    cacheManager.addSource(basicInfo, fromPersistentCache);
+    cacheManager.audioSource.add(basicInfo, fromPersistentCache);
   }
 
   return basicInfo;
